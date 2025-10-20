@@ -8,8 +8,8 @@
 import cv2
 import numpy as np
 
-from eyetrax.calibration.common import wait_for_face_and_countdown
-from eyetrax.utils.screen import get_screen_size
+from model.calibration.common import wait_for_face_and_countdown
+from model.utils.screen import get_screen_size
 
 
 def run_lissajous_calibration(gaze_estimator, camera_index: int = 0):

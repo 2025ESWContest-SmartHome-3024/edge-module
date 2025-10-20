@@ -8,8 +8,8 @@ import cv2
 import mediapipe as mp
 import numpy as np
 
-from eyetrax.constants import LEFT_EYE_INDICES, MUTUAL_INDICES, RIGHT_EYE_INDICES
-from eyetrax.models import BaseModel, create_model
+from model.constants import LEFT_EYE_INDICES, MUTUAL_INDICES, RIGHT_EYE_INDICES
+from model.models import BaseModel, create_model
 
 
 class GazeEstimator:
