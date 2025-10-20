@@ -1,0 +1,28 @@
+```json
+{
+    "name": "eyetrax-frontend",
+    "version": "1.0.0",
+    "description": "EyeTrax 스마트홈 프론트엔드 - 시선 추적 기반 UI",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite - 개발 서버 실행 (http://localhost:3000)",
+        "build": "vite build - 프로덕션 빌드 생성",
+        "preview": "vite preview - 빌드된 앱 미리보기",
+        "lint": "eslint src --ext js,jsx --report-unused-disable-directives --max-warnings 0 - 코드 린팅 및 문법 검사"
+    },
+    "dependencies": {
+        "react": "^18.2.0 - React 라이브러리",
+        "react-dom": "^18.2.0 - React DOM 렌더링",
+        "react-router-dom": "^6.20.0 - SPA 라우팅",
+        "framer-motion": "^10.16.16 - 애니메이션 라이브러리",
+        "lucide-react": "^0.294.0 - 아이콘 컴포넌트"
+    },
+    "devDependencies": {
+        "@types/react": "^18.2.43 - React TypeScript 타입",
+        "@types/react-dom": "^18.2.17 - React DOM TypeScript 타입",
+        "@vitejs/plugin-react": "^4.2.1 - Vite React 플러그인",
+        "vite": "^6.1.7 - 빌드 도구 및 개발 서버"
+    }
+}
+```
