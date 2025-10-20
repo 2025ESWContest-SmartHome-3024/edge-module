@@ -15,10 +15,10 @@ from typing import List, Tuple
 import cv2
 import numpy as np
 
-from eyetrax.calibration.nine_point import run_9_point_calibration
-from eyetrax.gaze import GazeEstimator
-from eyetrax.utils.draw import draw_cursor
-from eyetrax.utils.screen import get_screen_size
+from model.calibration.nine_point import run_9_point_calibration
+from model.gaze import GazeEstimator
+from model.utils.draw import draw_cursor
+from model.utils.screen import get_screen_size
 
 
 class BlueNoiseSampler:

@@ -1,5 +1,5 @@
 """
-EyeTrax - 시선 추적 라이브러리
+GazeHome Model - 시선 추적 라이브러리
 
 이 패키지는 MediaPipe와 머신러닝을 활용한 웹캠 기반 시선 추적을 제공합니다.
 
@@ -15,13 +15,13 @@ from ._version import __version__
 # 모듈을 실제로 사용할 때만 임포트하여 시작 시간을 단축합니다
 _lazy_map = {
     # 시선 추적 엔진
-    "GazeEstimator": ("eyetrax.gaze", "GazeEstimator"),
+    "GazeEstimator": ("model.gaze", "GazeEstimator"),
     # 필터 함수
-    "make_kalman": ("eyetrax.filters", "make_kalman"),
+    "make_kalman": ("model.filters", "make_kalman"),
     # 캘리브레이션 함수들
-    "run_9_point_calibration": ("eyetrax.calibration", "run_9_point_calibration"),
-    "run_5_point_calibration": ("eyetrax.calibration", "run_5_point_calibration"),
-    "run_lissajous_calibration": ("eyetrax.calibration", "run_lissajous_calibration"),
+    "run_9_point_calibration": ("model.calibration", "run_9_point_calibration"),
+    "run_5_point_calibration": ("model.calibration", "run_5_point_calibration"),
+    "run_lissajous_calibration": ("model.calibration", "run_lissajous_calibration"),
 }
 
 
