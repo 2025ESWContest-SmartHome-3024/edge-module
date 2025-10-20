@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { X, Sparkles, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
 import './RecommendationModal.css'
@@ -23,12 +24,27 @@ const PRIORITY_COLORS = {
  * - 최상위 추천 사항을 메인 영역에 표시
  * - 추가 추천 3개까지 리스트에 표시
  * - 사용자가 추천을 수락하거나 거절할 수 있음
+ * - 🔒 버튼 클릭 후 1.5초 포인터 고정
+ * - 👁️ 모달 위에서 깜빡임 감지 → 버튼 실행
  * 
  * @param {Array} recommendations - 추천 배열
  * @param {Function} onAccept - 추천 수락 콜백
  * @param {Function} onClose - 모달 닫기 콜백
+ * @param {boolean} prolongedBlink - 0.5초 이상 눈깜빡임
+ * @param {boolean} isPointerLocked - 전역 포인터 고정 상태
+ * @param {Function} onPointerEnter - 포인터 고정 콜백 (버튼 호버 시)
  */
-function RecommendationModal({ recommendations, onAccept, onClose }) {
+function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlink, isPointerLocked, onPointerEnter }) {
+    // 🔒 포인터 고정 상태
+    const [isLocked, setIsLocked] = useState(false)
+    const lockTimerRef = useRef(null)
+
+    // ⏱️ 포인터 고정 시간 (ms)
+    const LOCK_DURATION = 1500  // 1.5초
+
+    // 이전 prolongedBlink 상태 추적 (상태 변화 감지용)
+    const prevBlinkRef = useRef(false)
+
     // 최상위 추천 (우선순위 최고)
     const topRecommendation = recommendations[0]
 
@@ -37,6 +53,78 @@ function RecommendationModal({ recommendations, onAccept, onClose }) {
     // 우선순위에 맞는 색상 스타일 가져오기
     const priorityStyle = PRIORITY_COLORS[topRecommendation.priority] || PRIORITY_COLORS[3]
     const PriorityIcon = priorityStyle.icon
+
+    /**
+     * 버튼 클릭 핸들러
+     * - 포인터 고정 시작
+     * - 콜백 실행
+     */
+    const handleButtonClick = (callback) => {
+        // 🔒 1.5초 포인터 고정 시작
+        console.log(`[RecommendationModal] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
+        setIsLocked(true)
+
+        // 기존 타이머 정리
+        if (lockTimerRef.current) {
+            clearTimeout(lockTimerRef.current)
+        }
+
+        // 1.5초 후 포인터 고정 해제
+        lockTimerRef.current = setTimeout(() => {
+            console.log(`[RecommendationModal] 포인터 고정 해제`)
+            setIsLocked(false)
+        }, LOCK_DURATION)
+
+        // 콜백 실행
+        callback()
+    }
+
+    // 컴포넌트 언마운트시 타이머 정리
+    const cleanup = () => {
+        if (lockTimerRef.current) {
+            clearTimeout(lockTimerRef.current)
+        }
+    }
+
+    /**
+     * 👁️ 눈깜빡임 감지 - 모달 내 버튼 클릭
+     * prolongedBlink가 false → true 전환 감지 (깜빡임 완료)
+     */
+    useEffect(() => {
+        if (isLocked) return
+
+        // 이전 상태: false, 현재 상태: true (깜빡임 END)
+        if (!prevBlinkRef.current && prolongedBlink) {
+            prevBlinkRef.current = prolongedBlink
+
+            // 시선이 모달 영역에 있는지 확인
+            const modal = document.querySelector('.recommendation-modal')
+            const gazeCursor = document.querySelector('.gaze-cursor')
+
+            if (!modal || !gazeCursor) return
+
+            const modalRect = modal.getBoundingClientRect()
+            const cursorRect = gazeCursor.getBoundingClientRect()
+            const cursorX = cursorRect.left + cursorRect.width / 2
+            const cursorY = cursorRect.top + cursorRect.height / 2
+
+            // 시선이 모달 내부에 있는지 확인
+            const isInside =
+                cursorX >= modalRect.left &&
+                cursorX <= modalRect.right &&
+                cursorY >= modalRect.top &&
+                cursorY <= modalRect.bottom
+
+            if (isInside) {
+                // 👁️ 모달 위에서 깜빡임 감지 → "적용하기" 버튼 클릭
+                console.log(`[RecommendationModal] 👁️ 1초 깜빡임 클릭 감지 - "적용하기" 실행`)
+                handleButtonClick(() => onAccept(topRecommendation))
+            }
+        } else {
+            // 상태 업데이트
+            prevBlinkRef.current = prolongedBlink
+        }
+    }, [prolongedBlink, isLocked, topRecommendation])
 
     return (
         <motion.div
@@ -103,14 +191,30 @@ function RecommendationModal({ recommendations, onAccept, onClose }) {
                     <div className="modal-actions">
                         <button
                             className="action-button accept"
-                            onClick={() => onAccept(topRecommendation)}
+                            onClick={() => handleButtonClick(() => onAccept(topRecommendation))}
+                            disabled={isLocked}
+                            onMouseEnter={() => {
+                                // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
+                                console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
+                                if (onPointerEnter) {
+                                    onPointerEnter(1500)
+                                }
+                            }}
                         >
                             <CheckCircle size={20} />
                             적용하기
                         </button>
                         <button
                             className="action-button dismiss"
-                            onClick={onClose}
+                            onClick={() => handleButtonClick(onClose)}
+                            disabled={isLocked}
+                            onMouseEnter={() => {
+                                // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
+                                console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
+                                if (onPointerEnter) {
+                                    onPointerEnter(1500)
+                                }
+                            }}
                         >
                             나중에
                         </button>
@@ -134,7 +238,8 @@ function RecommendationModal({ recommendations, onAccept, onClose }) {
                                         key={rec.id}
                                         className="other-item"
                                         whileHover={{ x: 4 }}
-                                        onClick={() => onAccept(rec)}
+                                        onClick={() => handleButtonClick(() => onAccept(rec))}
+                                        style={{ cursor: isLocked ? 'not-allowed' : 'pointer', opacity: isLocked ? 0.6 : 1 }}
                                     >
                                         <div
                                             className="other-icon"
