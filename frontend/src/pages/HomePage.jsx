@@ -28,6 +28,8 @@ function HomePage({ onLogout }) {
     const [gazePosition, setGazePosition] = useState({ x: 0, y: 0 })
     // WebSocket 연결 상태
     const [isConnected, setIsConnected] = useState(false)
+    // 🔍 시선 인식 가능 여부 (false = 눈이 감겼거나 인식 불가)
+    const [calibrated, setCalibrated] = useState(true)
     // 로그인한 사용자명
     const [username, setUsername] = useState('')
     // 👁️ 0.5초 이상 눈깜빡임 감지
@@ -124,7 +126,12 @@ function HomePage({ onLogout }) {
                     setBlink(data.blink)
                 }
 
-                // 👁️ 1초 이상 눈깜빡임 감지
+                // � 시선 인식 가능 여부 (false = 시선 불인식, 포인터 마지막 위치 고정)
+                if (data.calibrated !== undefined) {
+                    setCalibrated(data.calibrated)
+                }
+
+                // �👁️ 1초 이상 눈깜빡임 감지
                 if (data.prolonged_blink !== undefined) {
                     setProlongedBlink(data.prolonged_blink)
 
@@ -207,7 +214,7 @@ function HomePage({ onLogout }) {
     return (
         <div className="home-page">
             {/* 시선 커서 표시 */}
-            <GazeCursor x={gazePosition.x} y={gazePosition.y} visible={isConnected} blink={blink} />
+            <GazeCursor x={gazePosition.x} y={gazePosition.y} visible={isConnected} blink={blink} calibrated={calibrated} />
 
             {/* 헤더 */}
             <header className="home-header">
