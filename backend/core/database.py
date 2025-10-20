@@ -16,10 +16,10 @@ class Database:
         """데이터베이스 초기화.
         
         Args:
-            db_path: 데이터베이스 파일 경로 (기본값: ~/.eyetrax/calibrations/eyetrax.db)
+            db_path: 데이터베이스 파일 경로 (기본값: ~/.gazehome/calibrations/gazehome.db)
         """
         if db_path is None:
-            db_path = settings.calibration_dir / "eyetrax.db"
+            db_path = settings.calibration_dir / "gazehome.db"
         
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     global gaze_tracker
     
     # 시작
-    print(f"[Backend] EyeTrax 웹 서버 시작: {settings.host}:{settings.port}")
+    print(f"[Backend] GazeHome 웹 서버 시작: {settings.host}:{settings.port}")
     gaze_tracker = WebGazeTracker(
         camera_index=settings.camera_index,
         model_name=settings.model_name,
@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
 
 # FastAPI 앱 생성
 app = FastAPI(
-    title="EyeTrax 스마트 홈 API",
+    title="GazeHome 스마트 홈 API",
     description="시선 제어 스마트 홈 백엔드",
     version="1.0.0",
     lifespan=lifespan
@@ -90,7 +90,7 @@ app.include_router(users.router, prefix="/api/users", tags=["Users"])
 async def root():
     """루트 엔드포인트."""
     return {
-        "app": "EyeTrax 스마트 홈",
+        "app": "GazeHome 스마트 홈",
         "version": "1.0.0",
         "status": "실행 중"
     }
