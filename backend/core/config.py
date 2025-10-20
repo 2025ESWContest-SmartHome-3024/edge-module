@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     screen_height: int = 1080
     
     # 캘리브레이션 설정
-    calibration_dir: Path = Path.home() / ".eyetrax" / "calibrations"
+    calibration_dir: Path = Path.home() / ".gazehome" / "calibrations"
     
     # CORS 설정 (프로덕션 환경에서는 조정 필요)
     cors_origins: list[str] = [

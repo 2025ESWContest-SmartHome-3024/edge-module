@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""EyeTrax 백엔드 서버를 실행합니다."""
+"""GazeHome 백엔드 서버를 실행합니다."""
 import sys
 from pathlib import Path
 
@@ -13,7 +13,7 @@ from backend.core.config import settings
 if __name__ == "__main__":
     print(f"""
 ╔══════════════════════════════════════════╗
-║   EyeTrax 스마트 홈 백엔드 서버         ║
+║   GazeHome 스마트 홈 백엔드 서버         ║
 ╚══════════════════════════════════════════╝
 
 서버: http://{settings.host}:{settings.port}

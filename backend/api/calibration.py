@@ -532,7 +532,7 @@ async def update_kalman_variance(request: UpdateKalmanVarianceRequest):
         raise HTTPException(status_code=400, detail="먼저 모델을 캘리브레이션해야 합니다")
     
     try:
-        from eyetrax.filters import KalmanSmoother
+        from model.filters import KalmanSmoother
         
         if not isinstance(gaze_tracker.smoother, KalmanSmoother):
             return {

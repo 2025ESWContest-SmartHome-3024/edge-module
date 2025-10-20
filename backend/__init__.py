@@ -1,2 +1,2 @@
-"""Backend package for EyeTrax Smart Home."""
+"""Backend package for GazeHome Smart Home."""
 from __future__ import annotations
