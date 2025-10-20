@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { X, Sparkles, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
 import './RecommendationModal.css'
@@ -25,12 +25,14 @@ const PRIORITY_COLORS = {
  * - 추가 추천 3개까지 리스트에 표시
  * - 사용자가 추천을 수락하거나 거절할 수 있음
  * - 🔒 버튼 클릭 후 1.5초 포인터 고정
+ * - 👁️ 모달 위에서 깜빡임 감지 → 버튼 실행
  * 
  * @param {Array} recommendations - 추천 배열
  * @param {Function} onAccept - 추천 수락 콜백
  * @param {Function} onClose - 모달 닫기 콜백
+ * @param {boolean} prolongedBlink - 0.5초 이상 눈깜빡임
  */
-function RecommendationModal({ recommendations, onAccept, onClose }) {
+function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlink }) {
     // 🔒 포인터 고정 상태
     const [isLocked, setIsLocked] = useState(false)
     const lockTimerRef = useRef(null)
@@ -78,6 +80,37 @@ function RecommendationModal({ recommendations, onAccept, onClose }) {
             clearTimeout(lockTimerRef.current)
         }
     }
+
+    /**
+     * 👁️ 눈깜빡임 감지 - 모달 내 버튼 클릭
+     */
+    useEffect(() => {
+        if (!prolongedBlink || isLocked) return
+
+        // 시선이 모달 영역에 있는지 확인
+        const modal = document.querySelector('.recommendation-modal')
+        const gazeCursor = document.querySelector('.gaze-cursor')
+
+        if (!modal || !gazeCursor) return
+
+        const modalRect = modal.getBoundingClientRect()
+        const cursorRect = gazeCursor.getBoundingClientRect()
+        const cursorX = cursorRect.left + cursorRect.width / 2
+        const cursorY = cursorRect.top + cursorRect.height / 2
+
+        // 시선이 모달 내부에 있는지 확인
+        const isInside =
+            cursorX >= modalRect.left &&
+            cursorX <= modalRect.right &&
+            cursorY >= modalRect.top &&
+            cursorY <= modalRect.bottom
+
+        if (isInside) {
+            // 👁️ 모달 위에서 깜빡임 감지 → "적용하기" 버튼 클릭
+            console.log(`[RecommendationModal] 👁️ 깜빡임 클릭 감지`)
+            handleButtonClick(() => onAccept(topRecommendation))
+        }
+    }, [prolongedBlink, isLocked])
 
     return (
         <motion.div

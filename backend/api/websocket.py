@@ -106,6 +106,7 @@ async def websocket_gaze(websocket: WebSocket):
                     "gaze": state["gaze"],
                     "raw_gaze": state["raw_gaze"],
                     "blink": bool(state["blink"]) if state["blink"] is not None else False,
+                    "prolonged_blink": bool(state.get("prolonged_blink", False)),  # 👁️ 0.5초+ 깜빡임
                     "calibrated": bool(state["calibrated"]) if state["calibrated"] is not None else False
                 }
                 

@@ -36,8 +36,8 @@ function GazeCursor({ x, y, visible }) {
             // 🎚️ Spring 애니메이션: 이 부분을 수정하여 이동 속도 조절
             transition={{
                 type: 'spring',
-                stiffness: 500,  // ← 이 값을 조정 (높을수록 빠름)
-                damping: 30      // ← 이 값을 조정 (높을수록 안정적)
+                stiffness: 300,  // ← 느리게 변경 (기본 500 → 300)
+                damping: 45      // ← 더 안정적으로 (기본 30 → 45)
             }}
         >
             {/* 외부 링 - 시선 위치 표시 */}

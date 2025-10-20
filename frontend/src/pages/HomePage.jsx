@@ -15,6 +15,7 @@ import './HomePage.css'
  * - 시선 추적 커서 표시
  * - 실시간 시선 위치 기반 dwell time 제어
  * - AI 추천 모달 주기적 표시
+ * - 👁️ 0.5초+ 눈깜빡임 감지 → 클릭 인식
  */
 function HomePage({ onLogout }) {
     // 연결된 기기 목록
@@ -29,6 +30,8 @@ function HomePage({ onLogout }) {
     const [isConnected, setIsConnected] = useState(false)
     // 로그인한 사용자명
     const [username, setUsername] = useState('')
+    // 👁️ 0.5초 이상 눈깜빡임 감지
+    const [prolongedBlink, setProlongedBlink] = useState(false)
 
     /**
      * 초기화: 사용자명 로드, 기기/추천 로드, WebSocket 연결
@@ -99,6 +102,15 @@ function HomePage({ onLogout }) {
             // 시선 업데이트 메시지 처리
             if (data.type === 'gaze_update' && data.gaze) {
                 setGazePosition({ x: data.gaze[0], y: data.gaze[1] })
+
+                // 👁️ 0.5초+ 눈깜빡임 감지
+                if (data.prolonged_blink !== undefined) {
+                    setProlongedBlink(data.prolonged_blink)
+
+                    if (data.prolonged_blink) {
+                        console.log('[HomePage] 눈깜빡임 감지 - 클릭으로 인식!')
+                    }
+                }
             }
         }
 
@@ -261,6 +273,7 @@ function HomePage({ onLogout }) {
                                     <DeviceCard
                                         device={device}
                                         onControl={handleDeviceControl}
+                                        prolongedBlink={prolongedBlink}
                                     />
                                 </motion.div>
                             ))}
@@ -276,6 +289,7 @@ function HomePage({ onLogout }) {
                         recommendations={recommendations}
                         onAccept={handleRecommendationAccept}
                         onClose={() => setShowRecommendations(false)}
+                        prolongedBlink={prolongedBlink}
                     />
                 )}
             </AnimatePresence>

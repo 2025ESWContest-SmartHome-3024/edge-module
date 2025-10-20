@@ -24,12 +24,14 @@ const DWELL_TIME = 2000
  * - 기기 상태 표시 (ON/OFF)
  * - 시선 hovering 감지 (dwell time)
  * - 2초 응시 후 자동 토글
+ * - 👁️ 0.5초+ 눈깜빡임 감지 → 즉시 토글
  * - 메타데이터 표시 (온도, 습도, 밝기 등)
  * 
  * @param {Object} device - 기기 정보
  * @param {Function} onControl - 기기 제어 콜백
+ * @param {boolean} prolongedBlink - 0.5초 이상 눈깜빡임 감지
  */
-function DeviceCard({ device, onControl }) {
+function DeviceCard({ device, onControl, prolongedBlink }) {
     // 현재 시선이 카드 위에 있는지 여부
     const [isHovering, setIsHovering] = useState(false)
     // 시선 유지 진행률 (0-1)
@@ -46,21 +48,66 @@ function DeviceCard({ device, onControl }) {
     const LOCK_DURATION = 1500  // 1.5초
 
     /**
+     * 👁️ 눈깜빡임 클릭 감지
+     * - 카드 위에서 0.5초+ 눈깜빡임 → 즉시 토글
+     */
+    useEffect(() => {
+        if (!prolongedBlink || isLocked) return
+
+        // 카드의 화면상 위치 확인
+        if (!cardRef.current) return
+
+        const rect = cardRef.current.getBoundingClientRect()
+        const gazeCursor = document.querySelector('.gaze-cursor')
+
+        if (!gazeCursor) return
+
+        // 시선 커서 위치
+        const cursorRect = gazeCursor.getBoundingClientRect()
+        const cursorX = cursorRect.left + cursorRect.width / 2
+        const cursorY = cursorRect.top + cursorRect.height / 2
+
+        // 시선이 카드 내부에 있는지 확인
+        const isInside =
+            cursorX >= rect.left &&
+            cursorX <= rect.right &&
+            cursorY >= rect.top &&
+            cursorY <= rect.bottom
+
+        if (isInside) {
+            // 👁️ 카드 위에서 눈깜빡임 감지 → 즉시 토글
+            console.log(`[DeviceCard] 👁️ 깜빡임 클릭 감지: ${device.name}`)
+            handleToggle()
+
+            // 🔒 1.5초 포인터 고정
+            setIsLocked(true)
+
+            if (lockTimerRef.current) {
+                clearTimeout(lockTimerRef.current)
+            }
+
+            lockTimerRef.current = setTimeout(() => {
+                console.log(`[DeviceCard] 포인터 고정 해제`)
+                setIsLocked(false)
+            }, LOCK_DURATION)
+
+            // 상태 초기화
+            setIsHovering(false)
+            setDwellProgress(0)
+            hoverStartTimeRef.current = null
+        }
+    }, [prolongedBlink, isLocked, device.name])
+
+    /**
      * 시선 위치 기반 hovering 감지
      * - requestAnimationFrame으로 지속적으로 시선 커서 위치 추적
      * - 카드와 시선 커서의 충돌 검사
      * - 2초 이상 응시 시 기기 토글
-     * - 🔒 클릭 후 1.5초간 포인터 움직임 무시 (고정)
+     * - 🔒 클릭 후 1.5초간 타이머 일시 정지 (고정)
      */
     useEffect(() => {
         const checkHover = () => {
             if (!cardRef.current) return
-
-            // 🔒 포인터 고정 중이면 hovering 감지 무시
-            if (isLocked) {
-                animationFrameRef.current = requestAnimationFrame(checkHover)
-                return
-            }
 
             // 카드의 화면상 위치 가져오기
             const rect = cardRef.current.getBoundingClientRect()
@@ -86,41 +133,49 @@ function DeviceCard({ device, onControl }) {
 
             if (isInside) {
                 if (!isHovering) {
-                    // hovering 시작
-                    setIsHovering(true)
-                    hoverStartTimeRef.current = Date.now()
-                    console.log(`[DeviceCard] 시선 감지: ${device.name}`)
+                    // hovering 시작 (포인터 고정 중이면 시작하지 않음)
+                    if (!isLocked) {
+                        setIsHovering(true)
+                        hoverStartTimeRef.current = Date.now()
+                        console.log(`[DeviceCard] 시선 감지: ${device.name}`)
+                    }
                 }
 
                 // 경과 시간 계산 (0-1 범위의 진행률)
-                const elapsed = Date.now() - hoverStartTimeRef.current
-                const progress = Math.min(elapsed / DWELL_TIME, 1)
-                setDwellProgress(progress)
+                // 🔒 포인터 고정 중이면 타이머 멈춤 (진행률 유지)
+                if (!isLocked && hoverStartTimeRef.current) {
+                    const elapsed = Date.now() - hoverStartTimeRef.current
+                    const progress = Math.min(elapsed / DWELL_TIME, 1)
+                    setDwellProgress(progress)
 
-                if (progress >= 1) {
-                    // 2초 완료: 기기 토글
-                    console.log(`[DeviceCard] 시선 유지 완료! ${device.name} 토글`)
-                    handleToggle()
+                    if (progress >= 1) {
+                        // 2초 완료: 기기 토글
+                        console.log(`[DeviceCard] 시선 유지 완료! ${device.name} 토글`)
+                        handleToggle()
 
-                    // 🔒 1.5초 포인터 고정 시작
-                    console.log(`[DeviceCard] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
-                    setIsLocked(true)
+                        // 🔒 1.5초 포인터 고정 시작
+                        console.log(`[DeviceCard] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
+                        setIsLocked(true)
 
-                    // 기존 타이머 정리
-                    if (lockTimerRef.current) {
-                        clearTimeout(lockTimerRef.current)
+                        // 기존 타이머 정리
+                        if (lockTimerRef.current) {
+                            clearTimeout(lockTimerRef.current)
+                        }
+
+                        // 1.5초 후 포인터 고정 해제 + 상태 초기화
+                        lockTimerRef.current = setTimeout(() => {
+                            console.log(`[DeviceCard] 포인터 고정 해제 - 새로운 응시 대기`)
+                            setIsLocked(false)
+                            setIsHovering(false)
+                            setDwellProgress(0)
+                            hoverStartTimeRef.current = null
+                        }, LOCK_DURATION)
+
+                        // 즉시 hovering 상태만 리셋 (진행 바 UI 업데이트)
+                        setIsHovering(false)
+                        setDwellProgress(0)
+                        hoverStartTimeRef.current = null
                     }
-
-                    // 1.5초 후 포인터 고정 해제
-                    lockTimerRef.current = setTimeout(() => {
-                        console.log(`[DeviceCard] 포인터 고정 해제`)
-                        setIsLocked(false)
-                    }, LOCK_DURATION)
-
-                    // 즉시 상태 리셋 (중복 토글 방지)
-                    setIsHovering(false)
-                    setDwellProgress(0)
-                    hoverStartTimeRef.current = null
                 }
             } else {
                 if (isHovering) {
