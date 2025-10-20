@@ -30,6 +30,9 @@ classifiers = [
   "Intended Audience :: Developers",
   "Topic :: Scientific/Engineering :: Image Recognition",
 ]
+dependencies = [
+    "uvicorn[standard]>=0.38.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/ck-zhang/eyetrax"

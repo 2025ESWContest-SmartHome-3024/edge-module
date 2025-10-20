@@ -78,6 +78,11 @@ class CalibrationCollectRequest(BaseModel):
     point_y: int
 
 
+class CalibrationNextPointRequest(BaseModel):
+    """다음 포인트로 이동 요청."""
+    session_id: str
+
+
 class CalibrationCompleteRequest(BaseModel):
     """캘리브레이션 완료 및 훈련 요청."""
     session_id: str
@@ -317,15 +322,16 @@ async def collect_calibration_data(request: CalibrationCollectRequest):
 
 
 @router.post("/next-point")
-async def next_calibration_point(session_id: str):
+async def next_calibration_point(request: CalibrationNextPointRequest):
     """다음 캘리브레이션 포인트로 이동합니다.
     
     Args:
-        session_id: 캘리브레이션 세션 ID
+        request: 다음 포인트 요청 (session_id 포함)
         
     Returns:
         다음 포인트 정보
     """
+    session_id = request.session_id
     if session_id not in calibration_sessions:
         raise HTTPException(status_code=404, detail=f"세션 {session_id}을 찾을 수 없습니다")
     
@@ -425,8 +431,7 @@ async def complete_calibration(request: CalibrationCompleteRequest):
         print(f"[Calibration] 세션 {request.session_id}: 훈련 완료, 저장 위치: {save_path}")
         print(f"[Calibration] 사용자 {username}를 위해 데이터베이스에 기록됨")
         
-        # 세션 정리
-        del calibration_sessions[request.session_id]
+        # 세션은 유지 (Kalman 튜닝에서 사용할 수 있도록)
         
         return CalibrationCompleteResponse(
             success=True,

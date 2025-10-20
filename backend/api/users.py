@@ -56,6 +56,28 @@ async def login_user(request: LoginRequest):
     has_calibration = db.has_calibration(username)
     calibration_file = db.get_latest_calibration(username) if has_calibration else None
     
+    # 캘리브레이션이 있으면 백엔드에서 로드
+    if has_calibration and calibration_file:
+        try:
+            from backend.api.main import gaze_tracker
+            from backend.core.config import settings
+            from pathlib import Path
+            
+            if gaze_tracker is not None:
+                # 전체 경로 구성
+                full_path = str(settings.calibration_dir / calibration_file)
+                
+                # 파일 존재 확인
+                if Path(full_path).exists():
+                    gaze_tracker.load_calibration(full_path)
+                    print(f"[User API] {username}의 캘리브레이션 로드됨: {full_path}")
+                else:
+                    print(f"[User API] 캘리브레이션 파일을 찾을 수 없음: {full_path}")
+        except Exception as e:
+            print(f"[User API] {username}의 캘리브레이션 로드 실패: {e}")
+            import traceback
+            traceback.print_exc()
+    
     print(f"[User API] 로그인: {username}, 캘리브레이션 여부: {has_calibration}")
     
     return LoginResponse(

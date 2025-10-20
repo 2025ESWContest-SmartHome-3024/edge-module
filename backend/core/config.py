@@ -18,8 +18,8 @@ class Settings(BaseSettings):
     
     # 시선 추적 설정
     camera_index: int = 0
-    model_name: str = "ridge"
-    filter_method: str = "kalman"
+    model_name: str = "ridge"  # 라즈베리파이 최적화: Ridge (가볍고 빠름)
+    filter_method: str = "noop"  # 라즈베리파이 최적화: NoOp (필터링 비활성화)
     screen_width: int = 1920
     screen_height: int = 1080
     

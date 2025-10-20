@@ -291,24 +291,33 @@ function CalibrationPage({ onComplete }) {
         // 모든 샘플 한 번에 전송
         try {
             for (const sample of samples) {
-                await fetch('/api/calibration/collect', {
+                const response = await fetch('/api/calibration/collect', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         session_id: sid,
-                        features: sample.features,
+                        features: Array.from(sample.features),  // numpy 배열을 JS 배열로 변환
                         point_x: sample.point_x,
                         point_y: sample.point_y,
                     }),
                 })
+
+                if (!response.ok) {
+                    const error = await response.json()
+                    console.warn(`[CalibrationPage] 샘플 전송 실패: ${response.status} - ${error.detail}`)
+                }
             }
         } catch (error) {
             console.error('샘플 전송 실패:', error)
         }
 
         try {
-            const response = await fetch(`/api/calibration/next-point?session_id=${sid}`, {
+            const response = await fetch(`/api/calibration/next-point`, {
                 method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sid
+                }),
             })
 
             const data = await response.json()
@@ -364,24 +373,28 @@ function CalibrationPage({ onComplete }) {
                 }),
             })
 
+            if (!response.ok) {
+                const errorData = await response.json()
+                throw new Error(`HTTP ${response.status}: ${errorData.detail || '알 수 없는 오류'}`)
+            }
+
             const result = await response.json()
 
             if (result.success) {
-                // Kalman 필터 튜닝 시작 (웹 UI 기반)
-                setStatus('tuning')
-                setMessage('Kalman 필터 파인튜닝 중...')
-
-                await startKalmanTuning()
+                // 라즈베리파이 최적화: Kalman 튜닝 건너뜀 (NoOp 필터 사용)
+                // Kalman 필터 튜닝은 CPU 부하가 높으므로 비활성화
+                console.log('[CalibrationPage] Kalman 튜닝 건너뜀 (NoOp 필터 사용)')
+                finishCalibration()
 
             } else {
                 setStatus('error')
-                setMessage(`보정 실패: ${result.message}`)
+                setMessage(`보정 실패: ${result.message || '알 수 없는 오류'}`)
             }
 
         } catch (error) {
             console.error('보정 완료 실패:', error)
             setStatus('error')
-            setMessage('보정 완료 실패')
+            setMessage(`보정 실패: ${error.message || '알 수 없는 오류'}`)
         }
     }
 
