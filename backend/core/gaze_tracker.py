@@ -37,6 +37,12 @@ class WebGazeTracker:
         self.calibrated = False
         self._lock = asyncio.Lock()
         
+        # 👁️ 눈깜빡임 추적 (0.5초 이상 = 클릭 인식)
+        self.blink_start_time: Optional[float] = None
+        self.blink_duration: float = 0.0
+        self.prolonged_blink_triggered: bool = False
+        self.PROLONGED_BLINK_DURATION = 0.5  # 0.5초 이상 눈깜빡임
+        
     async def initialize(self):
         """Initialize camera and smoother."""
         self.cap = cv2.VideoCapture(self.camera_index)
@@ -141,6 +147,30 @@ class WebGazeTracker:
         features, blink_detected = self.gaze_estimator.extract_features(frame)
         
         async with self._lock:
+            # 👁️ 눈깜빡임 추적 로직
+            if blink_detected:
+                # 눈깜빡임 시작
+                if self.blink_start_time is None:
+                    self.blink_start_time = time.time()
+                    self.prolonged_blink_triggered = False
+                    print("[GazeTracker] Blink detected - starting timer")
+                
+                # 눈깜빡임 지속 시간 계산
+                self.blink_duration = time.time() - self.blink_start_time
+                
+                # 0.5초 이상 눈깜빡임 감지
+                if self.blink_duration >= self.PROLONGED_BLINK_DURATION and not self.prolonged_blink_triggered:
+                    self.prolonged_blink_triggered = True
+                    print(f"[GazeTracker] PROLONGED BLINK DETECTED: {self.blink_duration:.2f}s - Click triggered!")
+            else:
+                # 눈깜빡임 종료
+                if self.blink_start_time is not None:
+                    self.blink_duration = time.time() - self.blink_start_time
+                    print(f"[GazeTracker] Blink ended: duration {self.blink_duration:.2f}s (threshold: {self.PROLONGED_BLINK_DURATION}s)")
+                
+                self.blink_start_time = None
+                self.prolonged_blink_triggered = False
+            
             self.current_blink = blink_detected
             
             if features is not None and not blink_detected and self.calibrated:
@@ -158,11 +188,25 @@ class WebGazeTracker:
                 self.raw_gaze = self.current_gaze
                 
     def get_current_state(self) -> dict:
-        """Get current gaze state (thread-safe, non-blocking)."""
+        """Get current gaze state (thread-safe, non-blocking).
+        
+        Returns:
+            dict: {
+                gaze: (x, y),
+                raw_gaze: (x, y),
+                blink: bool,
+                blink_duration: float (초),
+                prolonged_blink: bool (0.5초 이상),
+                calibrated: bool,
+                timestamp: float
+            }
+        """
         return {
             "gaze": self.current_gaze,
             "raw_gaze": self.raw_gaze,
             "blink": self.current_blink,
+            "blink_duration": self.blink_duration,
+            "prolonged_blink": self.prolonged_blink_triggered,  # 👁️ 0.5초 이상 눈깜빡임 = 클릭
             "calibrated": self.calibrated,
             "timestamp": time.time()
         }

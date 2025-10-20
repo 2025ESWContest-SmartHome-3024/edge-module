@@ -34,20 +34,33 @@ function DeviceCard({ device, onControl }) {
     const [isHovering, setIsHovering] = useState(false)
     // 시선 유지 진행률 (0-1)
     const [dwellProgress, setDwellProgress] = useState(0)
+    // 🔒 클릭 후 포인터 고정 상태
+    const [isLocked, setIsLocked] = useState(false)
 
     const cardRef = useRef(null)
     const hoverStartTimeRef = useRef(null)
     const animationFrameRef = useRef(null)
+    const lockTimerRef = useRef(null)
+
+    // ⏱️ 포인터 고정 시간 (ms)
+    const LOCK_DURATION = 1500  // 1.5초
 
     /**
      * 시선 위치 기반 hovering 감지
      * - requestAnimationFrame으로 지속적으로 시선 커서 위치 추적
      * - 카드와 시선 커서의 충돌 검사
      * - 2초 이상 응시 시 기기 토글
+     * - 🔒 클릭 후 1.5초간 포인터 움직임 무시 (고정)
      */
     useEffect(() => {
         const checkHover = () => {
             if (!cardRef.current) return
+
+            // 🔒 포인터 고정 중이면 hovering 감지 무시
+            if (isLocked) {
+                animationFrameRef.current = requestAnimationFrame(checkHover)
+                return
+            }
 
             // 카드의 화면상 위치 가져오기
             const rect = cardRef.current.getBoundingClientRect()
@@ -89,6 +102,21 @@ function DeviceCard({ device, onControl }) {
                     console.log(`[DeviceCard] 시선 유지 완료! ${device.name} 토글`)
                     handleToggle()
 
+                    // 🔒 1.5초 포인터 고정 시작
+                    console.log(`[DeviceCard] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
+                    setIsLocked(true)
+
+                    // 기존 타이머 정리
+                    if (lockTimerRef.current) {
+                        clearTimeout(lockTimerRef.current)
+                    }
+
+                    // 1.5초 후 포인터 고정 해제
+                    lockTimerRef.current = setTimeout(() => {
+                        console.log(`[DeviceCard] 포인터 고정 해제`)
+                        setIsLocked(false)
+                    }, LOCK_DURATION)
+
                     // 즉시 상태 리셋 (중복 토글 방지)
                     setIsHovering(false)
                     setDwellProgress(0)
@@ -113,8 +141,11 @@ function DeviceCard({ device, onControl }) {
             if (animationFrameRef.current) {
                 cancelAnimationFrame(animationFrameRef.current)
             }
+            if (lockTimerRef.current) {
+                clearTimeout(lockTimerRef.current)
+            }
         }
-    }, [isHovering, dwellProgress, device.name])
+    }, [isHovering, dwellProgress, device.name, isLocked])
 
     /**
      * 기기 토글 핸들러

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Eye, CheckCircle, AlertCircle } from 'lucide-react'
 import './CalibrationPage.css'
@@ -14,6 +15,8 @@ import './CalibrationPage.css'
  * @param {Function} onComplete - 보정 완료 콜백
  */
 function CalibrationPage({ onComplete }) {
+    // 라우터 네비게이션
+    const navigate = useNavigate()
     // 보정 상태 (init, ready, calibrating, training, tuning, completed, error)
     const [status, setStatus] = useState('init')
     // 백엔드 세션 ID
@@ -496,7 +499,8 @@ function CalibrationPage({ onComplete }) {
     /**
      * 보정 완료
      * - WebSocket 종료
-     * - 2초 후 홈으로 이동
+     * - 완료 콜백 실행
+     * - 홈으로 이동
      */
     const finishCalibration = () => {
         setStatus('completed')
@@ -507,10 +511,14 @@ function CalibrationPage({ onComplete }) {
             wsRef.current.close()
         }
 
-        // 2초 후 홈으로 이동
-        setTimeout(() => {
+        // 부모 컴포넌트 콜백 실행
+        if (onComplete) {
             onComplete()
-        }, 2000)
+        }
+
+        // 즉시 홈으로 이동 (지연 없음)
+        console.log('[CalibrationPage] 홈페이지로 이동 중...')
+        navigate('/home', { replace: true })
     }
 
     const currentPoint = points[currentPointIndex]
@@ -650,8 +658,26 @@ function CalibrationPage({ onComplete }) {
  * - 펄싱 원형 애니메이션
  * - 캡처 단계에서 진행 상황 표시
  * - 얼굴 인식 상태 시각적 피드백
+ * 
+ * 📍 포인터 위치 조정 가이드:
+ * - x: 좌우 위치 (0 = 좌측, window.innerWidth = 우측)
+ * - y: 상하 위치 (0 = 상단, window.innerHeight = 하단)
+ * - 9포인트: 좌상단, 중상단, 우상단, 좌중앙, 중앙, 우중앙, 좌하단, 중하단, 우하단
+ * - 백엔드에서 반환된 points[i].x, points[i].y 값을 수정하거나
+ * - 아래 오프셋을 조정하여 포인터 위치 미세 조정 가능
+ * 
+ * 조정 방법:
+ * 1. 백엔드 변경: backend/api/calibration.py의 nine_point_calibration 함수 수정
+ * 2. 프론트엔드 변경: 아래 offset 추가
  */
 function CalibrationPoint({ x, y, phase, progress, hasFace }) {
+    // ⚙️ 포인터 위치 미세 조정 (픽셀 단위)
+    const OFFSET_X = 0  // 좌우 조정: 음수 = 좌측, 양수 = 우측
+    const OFFSET_Y = 0  // 상하 조정: 음수 = 상단, 양수 = 하단
+
+    const adjustedX = x + OFFSET_X
+    const adjustedY = y + OFFSET_Y
+
     // 기본 반경
     const baseRadius = 20
     // 펄싱 단계에서는 반경이 변함
@@ -688,8 +714,8 @@ function CalibrationPoint({ x, y, phase, progress, hasFace }) {
         <div
             className="calibration-point-container"
             style={{
-                left: x,
-                top: y,
+                left: adjustedX,
+                top: adjustedY,
                 transform: 'translate(-50%, -50%)'  // 포인트 중심에 정렬
             }}
         >

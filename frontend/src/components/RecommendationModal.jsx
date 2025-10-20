@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { X, Sparkles, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
 import './RecommendationModal.css'
@@ -23,12 +24,20 @@ const PRIORITY_COLORS = {
  * - 최상위 추천 사항을 메인 영역에 표시
  * - 추가 추천 3개까지 리스트에 표시
  * - 사용자가 추천을 수락하거나 거절할 수 있음
+ * - 🔒 버튼 클릭 후 1.5초 포인터 고정
  * 
  * @param {Array} recommendations - 추천 배열
  * @param {Function} onAccept - 추천 수락 콜백
  * @param {Function} onClose - 모달 닫기 콜백
  */
 function RecommendationModal({ recommendations, onAccept, onClose }) {
+    // 🔒 포인터 고정 상태
+    const [isLocked, setIsLocked] = useState(false)
+    const lockTimerRef = useRef(null)
+
+    // ⏱️ 포인터 고정 시간 (ms)
+    const LOCK_DURATION = 1500  // 1.5초
+
     // 최상위 추천 (우선순위 최고)
     const topRecommendation = recommendations[0]
 
@@ -37,6 +46,38 @@ function RecommendationModal({ recommendations, onAccept, onClose }) {
     // 우선순위에 맞는 색상 스타일 가져오기
     const priorityStyle = PRIORITY_COLORS[topRecommendation.priority] || PRIORITY_COLORS[3]
     const PriorityIcon = priorityStyle.icon
+
+    /**
+     * 버튼 클릭 핸들러
+     * - 포인터 고정 시작
+     * - 콜백 실행
+     */
+    const handleButtonClick = (callback) => {
+        // 🔒 1.5초 포인터 고정 시작
+        console.log(`[RecommendationModal] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
+        setIsLocked(true)
+
+        // 기존 타이머 정리
+        if (lockTimerRef.current) {
+            clearTimeout(lockTimerRef.current)
+        }
+
+        // 1.5초 후 포인터 고정 해제
+        lockTimerRef.current = setTimeout(() => {
+            console.log(`[RecommendationModal] 포인터 고정 해제`)
+            setIsLocked(false)
+        }, LOCK_DURATION)
+
+        // 콜백 실행
+        callback()
+    }
+
+    // 컴포넌트 언마운트시 타이머 정리
+    const cleanup = () => {
+        if (lockTimerRef.current) {
+            clearTimeout(lockTimerRef.current)
+        }
+    }
 
     return (
         <motion.div
@@ -103,14 +144,16 @@ function RecommendationModal({ recommendations, onAccept, onClose }) {
                     <div className="modal-actions">
                         <button
                             className="action-button accept"
-                            onClick={() => onAccept(topRecommendation)}
+                            onClick={() => handleButtonClick(() => onAccept(topRecommendation))}
+                            disabled={isLocked}
                         >
                             <CheckCircle size={20} />
                             적용하기
                         </button>
                         <button
                             className="action-button dismiss"
-                            onClick={onClose}
+                            onClick={() => handleButtonClick(onClose)}
+                            disabled={isLocked}
                         >
                             나중에
                         </button>
@@ -134,7 +177,8 @@ function RecommendationModal({ recommendations, onAccept, onClose }) {
                                         key={rec.id}
                                         className="other-item"
                                         whileHover={{ x: 4 }}
-                                        onClick={() => onAccept(rec)}
+                                        onClick={() => handleButtonClick(() => onAccept(rec))}
+                                        style={{ cursor: isLocked ? 'not-allowed' : 'pointer', opacity: isLocked ? 0.6 : 1 }}
                                     >
                                         <div
                                             className="other-icon"

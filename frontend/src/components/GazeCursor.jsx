@@ -9,6 +9,22 @@ import './GazeCursor.css'
  * @param {number} x - 화면 X 좌표
  * @param {number} y - 화면 Y 좌표
  * @param {boolean} visible - 커서 표시 여부
+ * 
+ * 🎯 이동 속도 조절 가이드:
+ * - stiffness: 값이 높을수록 반응이 빠름 (강함)
+ *   * 800-1000: 아주 빠르고 민첨 (반응성 우선)
+ *   * 500-600: 중간 반응 (기본)
+ *   * 300-400: 느리고 부드러움 (안정성 우선)
+ * 
+ * - damping: 값이 높을수록 진동이 적고 안정적 (반발력)
+ *   * 40-50: 아주 안정적 (흔들림 거의 없음)
+ *   * 30-35: 중간 (기본)
+ *   * 20-25: 빠른 응답 (약간 흔들릴 수 있음)
+ * 
+ * 추천 조합:
+ * - 반응성 우선: stiffness: 800, damping: 25
+ * - 균형: stiffness: 550, damping: 35
+ * - 안정성 우선: stiffness: 350, damping: 45
  */
 function GazeCursor({ x, y, visible }) {
     if (!visible) return null
@@ -17,8 +33,12 @@ function GazeCursor({ x, y, visible }) {
         <motion.div
             className="gaze-cursor"
             animate={{ left: x, top: y }}
-            // Spring 애니메이션: stiffness가 높을수록 반응이 빠름
-            transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            // 🎚️ Spring 애니메이션: 이 부분을 수정하여 이동 속도 조절
+            transition={{
+                type: 'spring',
+                stiffness: 500,  // ← 이 값을 조정 (높을수록 빠름)
+                damping: 30      // ← 이 값을 조정 (높을수록 안정적)
+            }}
         >
             {/* 외부 링 - 시선 위치 표시 */}
             <div className="cursor-ring"></div>
