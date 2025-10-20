@@ -198,10 +198,10 @@ class GazeEstimator:
             # 0으로 나누지 않도록 방지
             X_std[X_std == 0] = 1
             X_scaled = X / X_std
-            self.model.fit(X_scaled, y)
+            self.model.train(X_scaled, y, variable_scaling=None)
         else:
             # 표준 스케일링 없이 직접 학습
-            self.model.fit(X, y)
+            self.model.train(X, y)
 
     def predict(self, X):
         """

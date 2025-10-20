@@ -30,6 +30,9 @@ classifiers = [
   "Intended Audience :: Developers",
   "Topic :: Scientific/Engineering :: Image Recognition",
 ]
+dependencies = [
+    "uvicorn[standard]>=0.38.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/ck-zhang/eyetrax"
@@ -112,7 +115,7 @@ dependencies = [
 
 [project.scripts]
 gazehome-backend   = "backend.run:main"
-gazehome-calibrate = "eyetrax.calibration:run_9_point_calibration"
+gazehome-calibrate = "model.calibration:run_9_point_calibration"
 
 # ============================================================================
 # 빌드 설정
@@ -120,13 +123,13 @@ gazehome-calibrate = "eyetrax.calibration:run_9_point_calibration"
 
 [tool.hatch.build.targets.wheel]
 packages = [
-  "src/eyetrax",
+  "model",
   "backend",
 ]
 
 [tool.hatch.build]
 include = [
-  "src/eyetrax/**",
+  "model/**",
   "backend/**",
   "frontend/**",
   "LICENSE",
@@ -145,7 +148,7 @@ exclude = [
 ]
 
 [tool.hatch.version]
-path = "src/eyetrax/_version.py"
+path = "model/_version.py"
 
 # ============================================================================
 # 개발 도구 설정
