@@ -35,7 +35,7 @@ function HomePage({ onLogout }) {
      */
     useEffect(() => {
         // localStorage에서 사용자명 로드
-        const storedUsername = localStorage.getItem('eyetrax_username') || '사용자'
+        const storedUsername = localStorage.getItem('gazehome_username') || '사용자'
         setUsername(storedUsername)
 
         loadDevices()

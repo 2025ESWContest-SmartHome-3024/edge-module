@@ -23,8 +23,8 @@ function App() {
      */
     useEffect(() => {
         // localStorage에서 로그인 정보 확인
-        const loggedIn = localStorage.getItem('eyetrax_logged_in') === 'true'
-        const username = localStorage.getItem('eyetrax_username')
+        const loggedIn = localStorage.getItem('gazehome_logged_in') === 'true'
+        const username = localStorage.getItem('gazehome_username')
 
         setIsLoggedIn(loggedIn)
 
@@ -91,8 +91,8 @@ function App() {
             console.log('[App] 로그인 응답:', data)
 
             // localStorage에 저장
-            localStorage.setItem('eyetrax_logged_in', 'true')
-            localStorage.setItem('eyetrax_username', username)
+            localStorage.setItem('gazehome_logged_in', 'true')
+            localStorage.setItem('gazehome_username', username)
             setIsLoggedIn(true)
 
             // 데이터베이스에서 보정 상태 설정
@@ -109,8 +109,8 @@ function App() {
      * 사용자 로그아웃 처리
      */
     const handleLogout = () => {
-        localStorage.removeItem('eyetrax_logged_in')
-        localStorage.removeItem('eyetrax_username')
+        localStorage.removeItem('gazehome_logged_in')
+        localStorage.removeItem('gazehome_username')
         setIsLoggedIn(false)
         setIsCalibrated(false)
     }

@@ -353,7 +353,7 @@ function CalibrationPage({ onComplete }) {
             setMessage('모델 학습 중...')
 
             // localStorage에서 사용자명 가져오기
-            const username = localStorage.getItem('eyetrax_username') || 'default'
+            const username = localStorage.getItem('gazehome_username') || 'default'
 
             const response = await fetch('/api/calibration/complete', {
                 method: 'POST',
