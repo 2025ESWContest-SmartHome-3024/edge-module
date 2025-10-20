@@ -34,6 +34,20 @@ function HomePage({ onLogout }) {
     const [prolongedBlink, setProlongedBlink] = useState(false)
     // 👁️ 현재 눈깜빡임 상태 (포인터 고정용)
     const [blink, setBlink] = useState(false)
+    // 🔒 글로벌 포인터 고정 상태 (버튼 위 포인터 1.5초 고정)
+    const [isPointerLocked, setIsPointerLocked] = useState(false)
+
+    /**
+     * 포인터 1.5초 고정 함수
+     * - 버튼 클릭 시 호출
+     * - 1.5초 동안 hovering 감지 차단
+     */
+    const lockPointer = (duration = 1500) => {
+        setIsPointerLocked(true)
+        setTimeout(() => {
+            setIsPointerLocked(false)
+        }, duration)
+    }
 
     /**
      * 초기화: 사용자명 로드, 기기/추천 로드, WebSocket 연결
@@ -281,6 +295,8 @@ function HomePage({ onLogout }) {
                                         device={device}
                                         onControl={handleDeviceControl}
                                         prolongedBlink={prolongedBlink}
+                                        isPointerLocked={isPointerLocked}
+                                        onPointerEnter={lockPointer}
                                     />
                                 </motion.div>
                             ))}
@@ -297,6 +313,8 @@ function HomePage({ onLogout }) {
                         onAccept={handleRecommendationAccept}
                         onClose={() => setShowRecommendations(false)}
                         prolongedBlink={prolongedBlink}
+                        isPointerLocked={isPointerLocked}
+                        onPointerEnter={lockPointer}
                     />
                 )}
             </AnimatePresence>

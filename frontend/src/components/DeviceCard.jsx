@@ -30,8 +30,10 @@ const DWELL_TIME = 2000
  * @param {Object} device - 기기 정보
  * @param {Function} onControl - 기기 제어 콜백
  * @param {boolean} prolongedBlink - 0.5초 이상 눈깜빡임 감지
+ * @param {boolean} isPointerLocked - 전역 포인터 고정 상태
+ * @param {Function} onPointerEnter - 포인터 고정 콜백 (버튼 호버 시)
  */
-function DeviceCard({ device, onControl, prolongedBlink }) {
+function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPointerEnter }) {
     // 현재 시선이 카드 위에 있는지 여부
     const [isHovering, setIsHovering] = useState(false)
     // 시선 유지 진행률 (0-1)
@@ -311,6 +313,13 @@ function DeviceCard({ device, onControl, prolongedBlink }) {
                 <button
                     className={`control-button ${isOn ? 'on' : 'off'}`}
                     onClick={handleToggle}
+                    onMouseEnter={() => {
+                        // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
+                        console.log(`[DeviceCard Button] 포인터 버튼 진입 - 1.5초 고정`)
+                        if (onPointerEnter) {
+                            onPointerEnter(1500)
+                        }
+                    }}
                 >
                     <Power size={18} />
                     {isOn ? '끄기' : '켜기'}

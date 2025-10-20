@@ -31,8 +31,10 @@ const PRIORITY_COLORS = {
  * @param {Function} onAccept - 추천 수락 콜백
  * @param {Function} onClose - 모달 닫기 콜백
  * @param {boolean} prolongedBlink - 0.5초 이상 눈깜빡임
+ * @param {boolean} isPointerLocked - 전역 포인터 고정 상태
+ * @param {Function} onPointerEnter - 포인터 고정 콜백 (버튼 호버 시)
  */
-function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlink }) {
+function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlink, isPointerLocked, onPointerEnter }) {
     // 🔒 포인터 고정 상태
     const [isLocked, setIsLocked] = useState(false)
     const lockTimerRef = useRef(null)
@@ -191,6 +193,13 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             className="action-button accept"
                             onClick={() => handleButtonClick(() => onAccept(topRecommendation))}
                             disabled={isLocked}
+                            onMouseEnter={() => {
+                                // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
+                                console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
+                                if (onPointerEnter) {
+                                    onPointerEnter(1500)
+                                }
+                            }}
                         >
                             <CheckCircle size={20} />
                             적용하기
@@ -199,6 +208,13 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             className="action-button dismiss"
                             onClick={() => handleButtonClick(onClose)}
                             disabled={isLocked}
+                            onMouseEnter={() => {
+                                // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
+                                console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
+                                if (onPointerEnter) {
+                                    onPointerEnter(1500)
+                                }
+                            }}
                         >
                             나중에
                         </button>
