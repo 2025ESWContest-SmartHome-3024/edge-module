@@ -8,8 +8,8 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
-from eyetrax.gaze import GazeEstimator
-from eyetrax.filters import KalmanSmoother, KDESmoother, NoSmoother, make_kalman
+from model.gaze import GazeEstimator
+from model.filters import KalmanSmoother, KDESmoother, NoSmoother, make_kalman
 
 
 class WebGazeTracker:
