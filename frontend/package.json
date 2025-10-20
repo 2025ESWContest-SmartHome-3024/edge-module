@@ -1,8 +1,7 @@
-```json
 {
-    "name": "eyetrax-frontend",
+    "name": "gazehome-frontend",
     "version": "1.0.0",
-    "description": "EyeTrax 스마트홈 프론트엔드 - 시선 추적 기반 UI",
+    "description": "GazeHome 스마트홈 프론트엔드 - 시선 추적 기반 UI",
     "private": true,
     "type": "module",
     "scripts": {
@@ -25,4 +24,3 @@
         "vite": "^6.1.7 - 빌드 도구 및 개발 서버"
     }
 }
-```
