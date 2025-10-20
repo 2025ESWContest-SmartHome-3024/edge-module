@@ -47,54 +47,66 @@ function DeviceCard({ device, onControl, prolongedBlink }) {
     // ⏱️ 포인터 고정 시간 (ms)
     const LOCK_DURATION = 1500  // 1.5초
 
+    // 이전 prolongedBlink 상태 추적 (상태 변화 감지용)
+    const prevBlinkRef = useRef(false)
+
     /**
      * 👁️ 눈깜빡임 클릭 감지
-     * - 카드 위에서 0.5초+ 눈깜빡임 → 즉시 토글
+     * - 카드 위에서 1초 눈깜빡임 → 즉시 토글
+     * prolongedBlink가 false → true 전환 감지 (깜빡임 완료)
      */
     useEffect(() => {
-        if (!prolongedBlink || isLocked) return
+        if (isLocked) return
 
-        // 카드의 화면상 위치 확인
-        if (!cardRef.current) return
+        // 이전 상태: false, 현재 상태: true (깜빡임 END)
+        if (!prevBlinkRef.current && prolongedBlink) {
+            prevBlinkRef.current = prolongedBlink
 
-        const rect = cardRef.current.getBoundingClientRect()
-        const gazeCursor = document.querySelector('.gaze-cursor')
+            // 카드의 화면상 위치 확인
+            if (!cardRef.current) return
 
-        if (!gazeCursor) return
+            const rect = cardRef.current.getBoundingClientRect()
+            const gazeCursor = document.querySelector('.gaze-cursor')
 
-        // 시선 커서 위치
-        const cursorRect = gazeCursor.getBoundingClientRect()
-        const cursorX = cursorRect.left + cursorRect.width / 2
-        const cursorY = cursorRect.top + cursorRect.height / 2
+            if (!gazeCursor) return
 
-        // 시선이 카드 내부에 있는지 확인
-        const isInside =
-            cursorX >= rect.left &&
-            cursorX <= rect.right &&
-            cursorY >= rect.top &&
-            cursorY <= rect.bottom
+            // 시선 커서 위치
+            const cursorRect = gazeCursor.getBoundingClientRect()
+            const cursorX = cursorRect.left + cursorRect.width / 2
+            const cursorY = cursorRect.top + cursorRect.height / 2
 
-        if (isInside) {
-            // 👁️ 카드 위에서 눈깜빡임 감지 → 즉시 토글
-            console.log(`[DeviceCard] 👁️ 깜빡임 클릭 감지: ${device.name}`)
-            handleToggle()
+            // 시선이 카드 내부에 있는지 확인
+            const isInside =
+                cursorX >= rect.left &&
+                cursorX <= rect.right &&
+                cursorY >= rect.top &&
+                cursorY <= rect.bottom
 
-            // 🔒 1.5초 포인터 고정
-            setIsLocked(true)
+            if (isInside) {
+                // 👁️ 카드 위에서 1초 깜빡임 감지 → 즉시 토글
+                console.log(`[DeviceCard] 👁️ 1초 깜빡임 클릭 감지: ${device.name}`)
+                handleToggle()
 
-            if (lockTimerRef.current) {
-                clearTimeout(lockTimerRef.current)
+                // 🔒 1.5초 포인터 고정
+                setIsLocked(true)
+
+                if (lockTimerRef.current) {
+                    clearTimeout(lockTimerRef.current)
+                }
+
+                lockTimerRef.current = setTimeout(() => {
+                    console.log(`[DeviceCard] 포인터 고정 해제`)
+                    setIsLocked(false)
+                }, LOCK_DURATION)
+
+                // 상태 초기화
+                setIsHovering(false)
+                setDwellProgress(0)
+                hoverStartTimeRef.current = null
             }
-
-            lockTimerRef.current = setTimeout(() => {
-                console.log(`[DeviceCard] 포인터 고정 해제`)
-                setIsLocked(false)
-            }, LOCK_DURATION)
-
-            // 상태 초기화
-            setIsHovering(false)
-            setDwellProgress(0)
-            hoverStartTimeRef.current = null
+        } else {
+            // 상태 업데이트
+            prevBlinkRef.current = prolongedBlink
         }
     }, [prolongedBlink, isLocked, device.name])
 
@@ -132,18 +144,15 @@ function DeviceCard({ device, onControl, prolongedBlink }) {
                 cursorY <= rect.bottom
 
             if (isInside) {
-                if (!isHovering) {
-                    // hovering 시작 (포인터 고정 중이면 시작하지 않음)
-                    if (!isLocked) {
-                        setIsHovering(true)
-                        hoverStartTimeRef.current = Date.now()
-                        console.log(`[DeviceCard] 시선 감지: ${device.name}`)
-                    }
+                // 포인터 고정이 해제되고 새로운 응시를 시작해야 할 때
+                if (!isLocked && !isHovering) {
+                    setIsHovering(true)
+                    hoverStartTimeRef.current = Date.now()
+                    console.log(`[DeviceCard] 시선 감지: ${device.name}`)
                 }
 
-                // 경과 시간 계산 (0-1 범위의 진행률)
-                // 🔒 포인터 고정 중이면 타이머 멈춤 (진행률 유지)
-                if (!isLocked && hoverStartTimeRef.current) {
+                // 경과 시간 계산 (포인터 고정 중에는 타이머 멈춤)
+                if (isHovering && hoverStartTimeRef.current && !isLocked) {
                     const elapsed = Date.now() - hoverStartTimeRef.current
                     const progress = Math.min(elapsed / DWELL_TIME, 1)
                     setDwellProgress(progress)
@@ -156,30 +165,26 @@ function DeviceCard({ device, onControl, prolongedBlink }) {
                         // 🔒 1.5초 포인터 고정 시작
                         console.log(`[DeviceCard] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
                         setIsLocked(true)
+                        setIsHovering(false)
+                        setDwellProgress(0)
+                        hoverStartTimeRef.current = null
 
                         // 기존 타이머 정리
                         if (lockTimerRef.current) {
                             clearTimeout(lockTimerRef.current)
                         }
 
-                        // 1.5초 후 포인터 고정 해제 + 상태 초기화
+                        // 1.5초 후 포인터 고정 해제
                         lockTimerRef.current = setTimeout(() => {
                             console.log(`[DeviceCard] 포인터 고정 해제 - 새로운 응시 대기`)
                             setIsLocked(false)
-                            setIsHovering(false)
-                            setDwellProgress(0)
-                            hoverStartTimeRef.current = null
+                            // isHovering, dwellProgress, hoverStartTimeRef는 자동으로 재설정됨
                         }, LOCK_DURATION)
-
-                        // 즉시 hovering 상태만 리셋 (진행 바 UI 업데이트)
-                        setIsHovering(false)
-                        setDwellProgress(0)
-                        hoverStartTimeRef.current = null
                     }
                 }
             } else {
+                // 포인터가 카드 밖으로 나감
                 if (isHovering) {
-                    // hovering 종료
                     console.log(`[DeviceCard] 시선 벗어남: ${device.name} (진행률: ${(dwellProgress * 100).toFixed(0)}%)`)
                     setIsHovering(false)
                     setDwellProgress(0)

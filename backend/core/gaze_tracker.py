@@ -37,11 +37,11 @@ class WebGazeTracker:
         self.calibrated = False
         self._lock = asyncio.Lock()
         
-        # 👁️ 눈깜빡임 추적 (0.5초 이상 = 클릭 인식)
+        # 👁️ 눈깜빡임 추적 (1초 이상 = 클릭 인식)
         self.blink_start_time: Optional[float] = None
         self.blink_duration: float = 0.0
         self.prolonged_blink_triggered: bool = False
-        self.PROLONGED_BLINK_DURATION = 0.5  # 0.5초 이상 눈깜빡임
+        self.PROLONGED_BLINK_DURATION = 1.0  # 👁️ 1초 이상 눈깜빡임 = 클릭
         
     async def initialize(self):
         """Initialize camera and smoother."""

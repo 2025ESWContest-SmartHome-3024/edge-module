@@ -32,6 +32,8 @@ function HomePage({ onLogout }) {
     const [username, setUsername] = useState('')
     // 👁️ 0.5초 이상 눈깜빡임 감지
     const [prolongedBlink, setProlongedBlink] = useState(false)
+    // 👁️ 현재 눈깜빡임 상태 (포인터 고정용)
+    const [blink, setBlink] = useState(false)
 
     /**
      * 초기화: 사용자명 로드, 기기/추천 로드, WebSocket 연결
@@ -103,12 +105,17 @@ function HomePage({ onLogout }) {
             if (data.type === 'gaze_update' && data.gaze) {
                 setGazePosition({ x: data.gaze[0], y: data.gaze[1] })
 
-                // 👁️ 0.5초+ 눈깜빡임 감지
+                // 👁️ 현재 눈깜빡임 상태 (포인터 고정)
+                if (data.blink !== undefined) {
+                    setBlink(data.blink)
+                }
+
+                // 👁️ 1초 이상 눈깜빡임 감지
                 if (data.prolonged_blink !== undefined) {
                     setProlongedBlink(data.prolonged_blink)
 
                     if (data.prolonged_blink) {
-                        console.log('[HomePage] 눈깜빡임 감지 - 클릭으로 인식!')
+                        console.log('[HomePage] 눈깜빡임 1초+ 감지 - 클릭으로 인식!')
                     }
                 }
             }
@@ -186,7 +193,7 @@ function HomePage({ onLogout }) {
     return (
         <div className="home-page">
             {/* 시선 커서 표시 */}
-            <GazeCursor x={gazePosition.x} y={gazePosition.y} visible={isConnected} />
+            <GazeCursor x={gazePosition.x} y={gazePosition.y} visible={isConnected} blink={blink} />
 
             {/* 헤더 */}
             <header className="home-header">

@@ -40,6 +40,9 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     // ⏱️ 포인터 고정 시간 (ms)
     const LOCK_DURATION = 1500  // 1.5초
 
+    // 이전 prolongedBlink 상태 추적 (상태 변화 감지용)
+    const prevBlinkRef = useRef(false)
+
     // 최상위 추천 (우선순위 최고)
     const topRecommendation = recommendations[0]
 
@@ -83,34 +86,43 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
 
     /**
      * 👁️ 눈깜빡임 감지 - 모달 내 버튼 클릭
+     * prolongedBlink가 false → true 전환 감지 (깜빡임 완료)
      */
     useEffect(() => {
-        if (!prolongedBlink || isLocked) return
+        if (isLocked) return
 
-        // 시선이 모달 영역에 있는지 확인
-        const modal = document.querySelector('.recommendation-modal')
-        const gazeCursor = document.querySelector('.gaze-cursor')
+        // 이전 상태: false, 현재 상태: true (깜빡임 END)
+        if (!prevBlinkRef.current && prolongedBlink) {
+            prevBlinkRef.current = prolongedBlink
 
-        if (!modal || !gazeCursor) return
+            // 시선이 모달 영역에 있는지 확인
+            const modal = document.querySelector('.recommendation-modal')
+            const gazeCursor = document.querySelector('.gaze-cursor')
 
-        const modalRect = modal.getBoundingClientRect()
-        const cursorRect = gazeCursor.getBoundingClientRect()
-        const cursorX = cursorRect.left + cursorRect.width / 2
-        const cursorY = cursorRect.top + cursorRect.height / 2
+            if (!modal || !gazeCursor) return
 
-        // 시선이 모달 내부에 있는지 확인
-        const isInside =
-            cursorX >= modalRect.left &&
-            cursorX <= modalRect.right &&
-            cursorY >= modalRect.top &&
-            cursorY <= modalRect.bottom
+            const modalRect = modal.getBoundingClientRect()
+            const cursorRect = gazeCursor.getBoundingClientRect()
+            const cursorX = cursorRect.left + cursorRect.width / 2
+            const cursorY = cursorRect.top + cursorRect.height / 2
 
-        if (isInside) {
-            // 👁️ 모달 위에서 깜빡임 감지 → "적용하기" 버튼 클릭
-            console.log(`[RecommendationModal] 👁️ 깜빡임 클릭 감지`)
-            handleButtonClick(() => onAccept(topRecommendation))
+            // 시선이 모달 내부에 있는지 확인
+            const isInside =
+                cursorX >= modalRect.left &&
+                cursorX <= modalRect.right &&
+                cursorY >= modalRect.top &&
+                cursorY <= modalRect.bottom
+
+            if (isInside) {
+                // 👁️ 모달 위에서 깜빡임 감지 → "적용하기" 버튼 클릭
+                console.log(`[RecommendationModal] 👁️ 1초 깜빡임 클릭 감지 - "적용하기" 실행`)
+                handleButtonClick(() => onAccept(topRecommendation))
+            }
+        } else {
+            // 상태 업데이트
+            prevBlinkRef.current = prolongedBlink
         }
-    }, [prolongedBlink, isLocked])
+    }, [prolongedBlink, isLocked, topRecommendation])
 
     return (
         <motion.div
