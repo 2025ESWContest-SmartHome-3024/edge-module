@@ -9,7 +9,7 @@ import cv2
 import numpy as np
 
 from model.gaze import GazeEstimator
-from model.filters import KalmanSmoother, KDESmoother, NoSmoother, make_kalman
+from model.filters import NoSmoother
 
 
 class WebGazeTracker:
@@ -19,8 +19,8 @@ class WebGazeTracker:
         self,
         camera_index: int = 0,
         model_name: str = "ridge",
-        filter_method: str = "kalman",
-        screen_size: Tuple[int, int] = (1920, 1080)
+        filter_method: str = "noop",
+        screen_size: Tuple[int, int] = (1024, 600)
     ):
         self.camera_index = camera_index
         self.model_name = model_name
@@ -44,23 +44,21 @@ class WebGazeTracker:
         self.PROLONGED_BLINK_DURATION = 1.0  # 👁️ 1초 이상 눈깜빡임 = 클릭
         
     async def initialize(self):
-        """Initialize camera and smoother."""
+        """Initialize camera and smoother.
+        
+        ⭐ 간소화된 설정:
+        - 모델: Ridge 회귀 (가볍고 빠름)
+        - 필터: NoOp (필터링 비활성화)
+        - 화면: 1024x600 (라즈베리파이 최적화)
+        """
         self.cap = cv2.VideoCapture(self.camera_index)
         if not self.cap.isOpened():
             raise RuntimeError(f"Cannot open camera {self.camera_index}")
         
-        # Initialize smoother
-        sw, sh = self.screen_size
-        if self.filter_method == "kalman":
-            kalman = make_kalman()
-            self.smoother = KalmanSmoother(kalman)
-            print(f"[GazeTracker] Initialized Kalman filter")
-        elif self.filter_method == "kde":
-            self.smoother = KDESmoother(sw, sh, confidence=0.95)
-            print(f"[GazeTracker] Initialized KDE filter")
-        else:
-            self.smoother = NoSmoother()
-            print(f"[GazeTracker] No smoothing filter")
+        # ⭐ 간소화: NoOp 필터만 사용 (필터링 비활성화)
+        self.smoother = NoSmoother()
+        print(f"[GazeTracker] Initialized with NoOp filter (no smoothing)")
+
             
     def load_calibration(self, model_path: str):
         """Load pre-trained calibration model."""
@@ -71,62 +69,10 @@ class WebGazeTracker:
         """Save current calibration model."""
         self.gaze_estimator.save_model(model_path)
     
-    def tune_kalman_filter(self) -> bool:
-        """
-        Tune Kalman filter using calibrated model.
-        
-        Returns:
-            True if tuning succeeded, False otherwise
-        """
-        if not self.calibrated:
-            print("[GazeTracker] Cannot tune Kalman: model not calibrated")
-            return False
-        
-        if not isinstance(self.smoother, KalmanSmoother):
-            print("[GazeTracker] Cannot tune: not using Kalman filter")
-            return False
-        
-        print("[GazeTracker] Starting Kalman filter tuning...")
-        try:
-            # Use the tune method from KalmanSmoother
-            # This will temporarily show points on screen and collect variance data
-            self.smoother.tune(
-                self.gaze_estimator,
-                capture=self.cap,
-                camera_index=self.camera_index
-            )
-            print("[GazeTracker] Kalman filter tuning completed")
-            return True
-        except Exception as e:
-            print(f"[GazeTracker] Kalman tuning failed: {e}")
-            return False
+    # ⭐ Kalman 필터 튜닝 제거됨 (NoOp 필터 사용)
+    # tune_kalman_filter(), get_kalman_params(), set_kalman_measurement_noise() 
+    # 메서드들은 필터링이 비활성화되어 있으므로 필요 없음
     
-    def get_kalman_params(self) -> dict:
-        """Get current Kalman filter parameters."""
-        if not isinstance(self.smoother, KalmanSmoother):
-            return {"error": "Not using Kalman filter"}
-        
-        kf = self.smoother.kf
-        return {
-            "measurement_noise_cov": kf.measurementNoiseCov.tolist(),
-            "process_noise_cov": kf.processNoiseCov.tolist(),
-            "error_cov_post": kf.errorCovPost.tolist()
-        }
-    
-    def set_kalman_measurement_noise(self, variance: float):
-        """
-        Adjust Kalman filter measurement noise covariance.
-        
-        Args:
-            variance: Measurement noise variance (higher = more smoothing, more lag)
-        """
-        if not isinstance(self.smoother, KalmanSmoother):
-            print("[GazeTracker] Not using Kalman filter")
-            return
-        
-        self.smoother.kf.measurementNoiseCov = np.eye(2, dtype=np.float32) * variance
-        print(f"[GazeTracker] Set Kalman measurement noise to {variance}")
-        
     async def start_tracking(self):
         """Start continuous gaze tracking."""
         self.is_running = True
