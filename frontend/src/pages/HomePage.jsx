@@ -107,7 +107,7 @@ function HomePage({ onLogout }) {
         try {
             const response = await fetch('/api/devices')
             const data = await response.json()
-            
+
             // Backend 응답 형식: { "success": true, "devices": [...], "count": 3, "source": "ai_server" }
             if (data.success && data.devices) {
                 // 기기 객체 변환: Backend 응답 형식 → Frontend 기대 형식
