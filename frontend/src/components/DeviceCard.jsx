@@ -210,10 +210,50 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
     }, [isHovering, dwellProgress, device.name, isLocked])
 
     /**
-     * 기기 토글 핸들러
+     * 기기 토글 핸들러 (시선 클릭 시 AI 서버로 요청)
+     * 
+     * 1. POST /api/devices/{device_id}/click 호출 (Backend)
+     * 2. Backend가 AI 서버에서 추천받기
+     * 3. 결과를 custom event로 HomePage에 전달
+     * 4. RecommendationModal에서 사용자 선택 대기
      */
-    const handleToggle = () => {
-        onControl(device.id, 'toggle')
+    const handleToggle = async () => {
+        try {
+            console.log(`[DeviceCard] 시선 클릭: ${device.name}`)
+
+            // Backend의 POST /api/devices/{device_id}/click 호출
+            // Response: { "success": true, "device_id": "...", "result": { "recommendation": {...} } }
+            const response = await fetch(`/api/devices/${device.device_id || device.id}/click`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    command: 'toggle'
+                })
+            })
+
+            const result = await response.json()
+
+            if (result.success) {
+                console.log(`[DeviceCard] AI 추천 수신:`, result.result)
+
+                // AI Server 응답에서 추천 추출
+                const recommendation = result.result?.recommendation
+
+                // HomePage에서 처리하기 위해 custom event 발생
+                const event = new CustomEvent('device-clicked', {
+                    detail: {
+                        device_id: device.device_id || device.id,
+                        device_name: device.name,
+                        recommendation: recommendation
+                    }
+                })
+                window.dispatchEvent(event)
+            } else {
+                console.error(`[DeviceCard] 클릭 처리 실패:`, result)
+            }
+        } catch (error) {
+            console.error(`[DeviceCard] 클릭 처리 오류:`, error)
+        }
     }
 
     // 기기 타입에 맞는 아이콘 가져오기

@@ -69,8 +69,34 @@ function HomePage({ onLogout }) {
             setShowRecommendations(true)
         }, 30000)
 
+        // 🎯 DeviceCard에서 발생한 클릭 이벤트 리스너
+        const handleDeviceClicked = (event) => {
+            const { device_id, device_name, recommendation } = event.detail
+            console.log(`[HomePage] 기기 클릭 감지: ${device_name}`, recommendation)
+
+            // AI 추천이 있으면 추천 모달 표시
+            if (recommendation) {
+                setRecommendations([{
+                    id: `rec_click_${Date.now()}`,
+                    title: `${device_name} 제어 추천`,
+                    description: recommendation.reason || '',
+                    device_id: device_id,
+                    device_name: device_name,
+                    action: recommendation.action || 'toggle',
+                    params: recommendation.params || {},
+                    reason: recommendation.reason || '시선 클릭 기반 추천',
+                    priority: 5,
+                    timestamp: new Date().toISOString()
+                }])
+                setShowRecommendations(true)
+            }
+        }
+
+        window.addEventListener('device-clicked', handleDeviceClicked)
+
         return () => {
             clearInterval(interval)
+            window.removeEventListener('device-clicked', handleDeviceClicked)
         }
     }, [])
 
@@ -81,22 +107,48 @@ function HomePage({ onLogout }) {
         try {
             const response = await fetch('/api/devices')
             const data = await response.json()
-            setDevices(data)
+            
+            // Backend 응답 형식: { "success": true, "devices": [...], "count": 3, "source": "ai_server" }
+            if (data.success && data.devices) {
+                // 기기 객체 변환: Backend 응답 형식 → Frontend 기대 형식
+                const transformedDevices = data.devices.map((device, index) => ({
+                    id: device.device_id,
+                    name: device.device_name,
+                    type: device.device_type,
+                    room: '거실',  // Backend에서 제공하지 않음
+                    state: 'off',  // Backend에서 제공하지 않음 (기본값)
+                    metadata: {
+                        current_temp: device.metadata?.current_temp,
+                        target_temp: device.metadata?.target_temp,
+                        mode: device.metadata?.mode,
+                        brightness: device.metadata?.brightness,
+                        pm25: device.metadata?.pm25,
+                    }
+                }))
+                setDevices(transformedDevices)
+            } else {
+                console.warn('기기 목록 응답 형식 오류:', data)
+                setDevices([])
+            }
         } catch (error) {
             console.error('기기 로드 실패:', error)
+            setDevices([])
         }
     }
 
     /**
      * AI 추천 로드
+     * 주의: 현재 구현에서는 주기적 호출이 없으므로, 기기 클릭 시에만 추천 수신
      */
     const loadRecommendations = async () => {
         try {
-            const response = await fetch('/api/recommendations')
-            const data = await response.json()
-            setRecommendations(data)
+            // 현재 백엔드에서 추천 조회 엔드포인트가 없음
+            // 추천은 POST /api/devices/{device_id}/click 응답에 포함됨
+            console.log('[HomePage] 추천 로드 스킵 (device click response에서 수신)')
+            setRecommendations([])
         } catch (error) {
             console.error('추천 로드 실패:', error)
+            setRecommendations([])
         }
     }
 
@@ -163,20 +215,25 @@ function HomePage({ onLogout }) {
      */
     const handleDeviceControl = async (deviceId, action, params = {}) => {
         try {
-            const response = await fetch(`/api/devices/${deviceId}/control`, {
+            // Backend: POST /api/devices/{device_id}/click
+            // 응답 형식: { "success": true, "device_id": "...", "result": {...} }
+            const response = await fetch(`/api/devices/${deviceId}/click`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action, params }),
+                body: JSON.stringify({ command: action }),
             })
 
             const result = await response.json()
 
             if (result.success) {
+                console.log('[HomePage] 기기 제어 성공:', result)
                 // 제어 성공 시 기기 목록 갱신
                 await loadDevices()
+            } else {
+                console.error('[HomePage] 기기 제어 실패:', result)
             }
         } catch (error) {
-            console.error('기기 제어 실패:', error)
+            console.error('[HomePage] 기기 제어 오류:', error)
         }
     }
 
@@ -199,13 +256,14 @@ function HomePage({ onLogout }) {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    recommendation_id: recommendation.id,
-                    accepted: true,
-                    rating: 5,
+                    recommendation_id: recommendation.id || recommendation.recommendation_id,
+                    user_id: localStorage.getItem('gazehome_user_id') || '1',
+                    accepted: true
                 }),
             })
+            console.log('[HomePage] 피드백 전송 완료')
         } catch (error) {
-            console.error('피드백 전송 실패:', error)
+            console.error('[HomePage] 피드백 전송 실패:', error)
         }
 
         setShowRecommendations(false)

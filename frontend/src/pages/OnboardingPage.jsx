@@ -25,6 +25,7 @@ function OnboardingPage({ onLogin }) {
 
         try {
             // 부모 로그인 핸들러 호출 (백엔드 API 호출)
+            // 데모 모드: 입력한 username은 localStorage에만 저장, 백엔드는 기본 사용자 사용
             await onLogin(username)
         } catch (error) {
             console.error('로그인 오류:', error)

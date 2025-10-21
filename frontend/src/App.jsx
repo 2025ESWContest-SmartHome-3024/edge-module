@@ -6,7 +6,8 @@ import CalibrationPage from './pages/CalibrationPage'
 import SettingsPage from './pages/SettingsPage'
 
 /**
- * 메인 애플리케이션 컴포넌트
+ * 메인 애플리케이션 컴인터
+ * 넌트
  * - 라우팅 관리
  * - 사용자 로그인 상태 관리
  * - 시선 보정 상태 관리
@@ -76,11 +77,10 @@ function App() {
         try {
             console.log(`[App] 사용자 로그인: "${username}"`)
 
-            // 백엔드 로그인 API 호출
+            // 백엔드 로그인 API 호출 (데모: username 무시, 기본 사용자 사용)
             const response = await fetch('/api/users/login', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ username: username })
+                headers: { 'Content-Type': 'application/json' }
             })
 
             if (!response.ok) {
@@ -90,7 +90,7 @@ function App() {
             const data = await response.json()
             console.log('[App] 로그인 응답:', data)
 
-            // localStorage에 저장
+            // localStorage에 저장 (UI 표시용 username)
             localStorage.setItem('gazehome_logged_in', 'true')
             localStorage.setItem('gazehome_username', username)
             setIsLoggedIn(true)
