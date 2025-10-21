@@ -9,26 +9,21 @@
 📊 데이터 흐름:
 ─────────────────────────────────────────────────────────────
 
-Frontend (기기 클릭)
+Frontend (시선으로 기기 클릭)
     ↓
     POST /api/devices/{device_id}/click
-Edge Module Backend (클릭 정보 수집)
+Edge Module Backend (클릭 정보를 AI Server로 전송)
     ↓
-    AI Server (추천 생성)
-    │
-    ├─→ 추천을 Frontend에 표시
-    │
-    └─→ 사용자 "적용" 클릭 시
-        POST /api/devices/feedback/apply
-        Edge Module (피드백 전송)
+    AI Server (클릭 정보 받고 바로 Gateway 제어)
+        ↓
+        🔥 Gateway: POST /api/lg/control ← AI Server가 자동 호출
             ↓
-            AI Server (추천 적용 처리)
-                ↓
-                🔥 Gateway: POST /api/lg/control ← AI Server가 호출
-                    ↓
-                    기기 제어 완료
+            기기 제어 완료
 
-⚠️ 중요: Edge Module은 Gateway를 직접 호출하지 않습니다!
+⚠️ 중요: 
+- Edge Module은 Gateway를 직접 호출하지 않습니다!
+- 시선 클릭 시 AI Server가 바로 제어하므로 피드백 불필요!
+- 추천 문구 피드백은 별도 API (/api/recommendations)
 """
 from __future__ import annotations
 
@@ -59,14 +54,6 @@ class DeviceClickRequest(BaseModel):
     user_id: str = Field(..., description="사용자 ID")
     session_id: str = Field(..., description="세션 ID")
     clicked_device: Dict[str, Any] = Field(..., description="클릭된 기기 정보")
-
-
-class RecommendationFeedback(BaseModel):
-    """✅ 추천 피드백 모델 (필수 정보만)"""
-    recommendation_id: str = Field(..., description="추천 ID")
-    user_id: str = Field(..., description="사용자 ID")
-    session_id: str = Field(..., description="세션 ID")
-    accepted: bool = Field(..., description="True = 적용, False = 나중에")
 
 
 # ============================================================================
@@ -188,22 +175,19 @@ async def handle_device_click(device_id: str, request: DeviceClickRequest):
             f"📍 기기 클릭: {request.clicked_device.get('device_name')} (user_id={request.user_id})"
         )
         
-        # ✅ AI Server로 전송 (응답에 추천 포함)
+        # ✅ AI Server로 전송 → AI Server가 바로 Gateway 제어
         ai_response = await ai_client.send_device_click(gaze_click_request)
         
-        # 응답에서 추천 꺼내기
-        recommendation = ai_response.get("recommendation", {})
-        
         logger.info(
-            f"✅ 추천 수신됨: {recommendation.get('recommendation_id')}"
+            f"✅ AI Server 처리 완료: click_id={ai_response.get('click_id')}"
         )
         
         return {
             "success": True,
-            "recommendation": recommendation,
-            "recommendation_id": recommendation.get("recommendation_id"),
+            "click_id": ai_response.get("click_id"),
             "session_id": request.session_id,
-            "status": ai_response.get("status")
+            "status": ai_response.get("status"),
+            "message": "기기 제어 명령이 AI Server로 전송되었습니다"
         }
     
     except Exception as e:
@@ -213,112 +197,3 @@ async def handle_device_click(device_id: str, request: DeviceClickRequest):
             "error": str(e)
         }
 
-
-# ============================================================================
-# 추천 피드백 엔드포인트
-# ============================================================================
-
-@router.post("/feedback/apply")
-async def apply_recommendation(feedback: RecommendationFeedback):
-    """
-    추천을 적용합니다 (사용자가 "적용하기" 클릭).
-    
-    POST /api/devices/feedback/apply
-    {
-        "recommendation_id": "rec_abc123",
-        "user_id": "1",
-        "session_id": "session_xyz_1729443600",
-        "accepted": true
-    }
-    
-    Returns:
-        {
-            "success": true,
-            "message": "추천이 적용되었습니다"
-        }
-    """
-    try:
-        logger.info(
-            f"🚀 추천 적용\n"
-            f"   - recommendation_id: {feedback.recommendation_id}\n"
-            f"   - user_id: {feedback.user_id}"
-        )
-        
-        # ✅ 피드백만 전송 (비동기)
-        feedback_data = {
-            "recommendation_id": feedback.recommendation_id,
-            "user_id": feedback.user_id,
-            "session_id": feedback.session_id,
-            "accepted": True
-        }
-        
-        asyncio.create_task(
-            ai_client.send_feedback(feedback_data)
-        )
-        
-        logger.info(f"✅ 피드백 전송 (백그라운드): {feedback.recommendation_id}")
-        
-        return {
-            "success": True,
-            "message": "추천이 적용되었습니다",
-            "recommendation_id": feedback.recommendation_id
-        }
-    
-    except Exception as e:
-        logger.error(f"❌ 추천 적용 실패: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-@router.post("/feedback/reject")
-async def reject_recommendation(feedback: RecommendationFeedback):
-    """
-    추천을 거절합니다 (사용자가 "나중에" 클릭).
-    
-    POST /api/devices/feedback/reject
-    {
-        "recommendation_id": "rec_abc123",
-        "user_id": "1",
-        "session_id": "session_xyz_1729443600",
-        "accepted": false
-    }
-    
-    Returns:
-        {
-            "success": true,
-            "message": "나중에 보기 - 피드백 전송됨"
-        }
-    """
-    try:
-        logger.info(
-            f"⏰ 추천 거절: {feedback.recommendation_id}"
-        )
-        
-        # ✅ 피드백만 전송 (비동기)
-        feedback_data = {
-            "recommendation_id": feedback.recommendation_id,
-            "user_id": feedback.user_id,
-            "session_id": feedback.session_id,
-            "accepted": False
-        }
-        
-        asyncio.create_task(
-            ai_client.send_feedback(feedback_data)
-        )
-        
-        logger.info(f"✅ 피드백 전송 (백그라운드): {feedback.recommendation_id}")
-        
-        return {
-            "success": True,
-            "message": "나중에 보기 - 피드백 전송됨",
-            "recommendation_id": feedback.recommendation_id
-        }
-    
-    except Exception as e:
-        logger.error(f"❌ 추천 거절 처리 실패: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }

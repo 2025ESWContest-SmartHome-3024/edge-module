@@ -243,55 +243,52 @@ class AIServiceClient:
             }
     
     # =========================================================================
-    # 4️⃣ 피드백 전송
+    # 4️⃣ 추천 문구 피드백 전송 (새로운 기능)
     # =========================================================================
     
-    async def send_feedback(
-        self, 
-        feedback: Dict[str, Any]
+    async def send_recommendation_feedback(
+        self,
+        recommendation_id: str,
+        user_id: str,
+        accepted: bool
     ) -> Dict[str, Any]:
         """
-        사용자 피드백을 AI 서버로 전송합니다.
+        AI Server가 보낸 추천 문구에 대한 사용자 피드백을 전송합니다.
         
-        ✅ 피드백 필수 정보만 전송
-        
-        동작:
-        1. Edge Module: 피드백 전송
-        2. AI Server: 피드백 처리
-           - 학습 데이터로 저장
-           - 🔥 accepted=true이면 Gateway에 제어 명령 전송 ← AI Server의 책임!
+        동작 흐름:
+        1. AI Server → Edge Module: 추천 제목 + 내용 전송
+        2. 사용자: YES/NO 선택
+        3. Edge Module → AI Server: 피드백 전송 (이 메서드)
         
         Args:
-            feedback: {
-                "recommendation_id": "rec_abc123",
-                "user_id": "user_001",
-                "session_id": "session_xyz_1729443600",
-                "accepted": true/false
-            }
+            recommendation_id: 추천 ID
+            user_id: 사용자 ID
+            accepted: True(YES) 또는 False(NO)
         
         Returns:
             AI 서버의 응답
         """
-        url = f"{self.base_url}/api/gaze/feedback"
+        url = f"{self.base_url}/api/recommendations/feedback"
         
-        # 타임스탬프 추가
-        feedback_with_timestamp = {
-            **feedback,
+        payload = {
+            "recommendation_id": recommendation_id,
+            "user_id": user_id,
+            "accepted": accepted,
             "timestamp": datetime.now(KST).isoformat()
         }
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 logger.info(
-                    f"📤 AI 서버 피드백 전송: POST {url}\n"
-                    f"   - recommendation_id: {feedback.get('recommendation_id')}\n"
-                    f"   - accepted: {feedback.get('accepted')}\n"
-                    f"   - session_id: {feedback.get('session_id')}"
+                    f"📤 AI 서버 추천 피드백 전송: POST {url}\n"
+                    f"   - recommendation_id: {recommendation_id}\n"
+                    f"   - user_id: {user_id}\n"
+                    f"   - accepted: {accepted}"
                 )
                 
                 response = await client.post(
                     url,
-                    json=feedback_with_timestamp,
+                    json=payload,
                     headers={"Content-Type": "application/json"}
                 )
                 
@@ -299,18 +296,17 @@ class AIServiceClient:
                 
                 result = response.json()
                 logger.info(
-                    f"✅ AI 서버 피드백 전송 성공\n"
-                    f"   - feedback_id: {result.get('feedback_id')}\n"
-                    f"   - accepted: {feedback.get('accepted')}"
+                    f"✅ AI 서버 추천 피드백 전송 성공\n"
+                    f"   - accepted: {accepted}"
                 )
                 
                 return result
                 
         except Exception as e:
-            logger.error(f"❌ AI 서버 피드백 전송 실패: {e}")
+            logger.error(f"❌ AI 서버 추천 피드백 전송 실패: {e}")
             return {
                 "success": False,
-                "message": f"피드백 전송 실패: {str(e)}"
+                "message": f"추천 피드백 전송 실패: {str(e)}"
             }
     
     # =========================================================================
