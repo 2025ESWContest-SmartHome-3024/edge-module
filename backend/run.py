@@ -22,8 +22,8 @@ API 문서: http://{settings.host}:{settings.port}/docs
 WebSocket: ws://{settings.host}:{settings.port}/ws/gaze
 
 설정:
-  - 시선 추적 모델: {settings.model_name} (가볍고 빠름)
-  - 필터: {settings.filter_method} (CPU 부하 최소화)
+  - 시선 추적 모델: {settings.model_name}
+  - 필터: {settings.filter_method} 
   - 화면 해상도: {settings.screen_width}x{settings.screen_height}
   - 카메라 인덱스: {settings.camera_index}
 
