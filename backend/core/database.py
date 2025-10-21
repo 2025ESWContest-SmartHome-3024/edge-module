@@ -1,16 +1,19 @@
-"""사용자 및 캘리브레이션 관리를 위한 SQLite 데이터베이스."""
+"""데모용 간소화된 SQLite 데이터베이스."""
 from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
 from typing import Optional, List, Dict
-from datetime import datetime
+import json
 
 from backend.core.config import settings
 
 
 class Database:
-    """사용자 관리를 위한 간단한 SQLite 데이터베이스."""
+    """데모용 간단한 SQLite 데이터베이스 (1명 사용자 가정)."""
+    
+    # 🎯 고정된 데모 사용자
+    DEFAULT_USERNAME = "demo_user"
     
     def __init__(self, db_path: Optional[Path] = None):
         """데이터베이스 초기화.
@@ -28,36 +31,31 @@ class Database:
         self._init_db()
     
     def _init_db(self):
-        """테이블이 없으면 생성합니다."""
+        """테이블 생성 (데모용 간소화)."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # 사용자 테이블
+            # ✅ 사용자 테이블 (간소화: username, id만)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    username TEXT UNIQUE NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    last_login TIMESTAMP
+                    username TEXT UNIQUE NOT NULL
                 )
             """)
             
-            # 캘리브레이션 테이블
+            # ✅ 캘리브레이션 테이블 (간소화: 필드 최소화)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS calibrations (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
                     calibration_file TEXT NOT NULL,
-                    screen_width INTEGER,
-                    screen_height INTEGER,
-                    method TEXT,
-                    samples_count INTEGER,
+                    method TEXT DEFAULT 'nine_point',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             """)
             
-            # 기기 테이블 (AI Server에서 가져온 기기 목록 캐싱)
+            # ✅ 기기 테이블 (간소화: capabilities만 JSON)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS devices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -66,237 +64,133 @@ class Database:
                     device_name TEXT NOT NULL,
                     device_type TEXT,
                     capabilities TEXT,
-                    last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id),
                     UNIQUE(user_id, device_id)
                 )
             """)
             
-            # 로그인 기록 테이블
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS login_history (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id)
-                )
-            """)
-            
             conn.commit()
             print(f"[Database] 초기화됨: {self.db_path}")
-    
-    def get_or_create_user(self, username: str) -> int:
-        """사용자 ID를 가져오거나 없으면 생성합니다.
-        
-        Args:
-            username: 사용자명
             
-        Returns:
-            사용자 ID
-        """
+            # 데모 사용자 생성
+            self._init_demo_user()
+    
+    def _init_demo_user(self):
+        """데모용 기본 사용자 생성."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
-            # 기존 사용자 조회
-            cursor.execute("SELECT id FROM users WHERE username = ?", (username,))
+            # 이미 존재하는지 확인
+            cursor.execute("SELECT id FROM users WHERE username = ?", (self.DEFAULT_USERNAME,))
+            result = cursor.fetchone()
+            
+            if not result:
+                cursor.execute(
+                    "INSERT INTO users (username) VALUES (?)",
+                    (self.DEFAULT_USERNAME,)
+                )
+                conn.commit()
+                print(f"[Database] 데모 사용자 생성: {self.DEFAULT_USERNAME}")
+    
+    def get_demo_user_id(self) -> int:
+        """데모 사용자 ID를 가져옵니다.
+        
+        Returns:
+            데모 사용자 ID
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id FROM users WHERE username = ?", (self.DEFAULT_USERNAME,))
             result = cursor.fetchone()
             
             if result:
-                user_id = result[0]
-                # 마지막 로그인 시간 업데이트
-                cursor.execute(
-                    "UPDATE users SET last_login = ? WHERE id = ?",
-                    (datetime.now(), user_id)
-                )
-            else:
-                # 새로운 사용자 생성
-                cursor.execute(
-                    "INSERT INTO users (username, last_login) VALUES (?, ?)",
-                    (username, datetime.now())
-                )
-                user_id = cursor.lastrowid
-                print(f"[Database] 새로운 사용자 생성: {username} (ID: {user_id})")
+                return result[0]
             
+            # 없으면 생성
+            cursor.execute("INSERT INTO users (username) VALUES (?)", (self.DEFAULT_USERNAME,))
             conn.commit()
-            return user_id
+            return cursor.lastrowid
     
-    def record_login(self, username: str):
-        """로그인 이벤트를 기록합니다.
-        
-        Args:
-            username: 사용자명
-        """
-        user_id = self.get_or_create_user(username)
-        
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "INSERT INTO login_history (user_id) VALUES (?)",
-                (user_id,)
-            )
-            conn.commit()
+    # =========================================================================
+    # 캘리브레이션 관리
+    # =========================================================================
     
     def add_calibration(
         self,
-        username: str,
         calibration_file: str,
-        screen_width: int,
-        screen_height: int,
-        method: str = "nine_point",
-        samples_count: int = 0
+        method: str = "nine_point"
     ):
-        """새로운 캘리브레이션을 기록합니다.
+        """새로운 캘리브레이션을 기록합니다 (데모는 항상 1명 사용자).
         
         Args:
-            username: 사용자명
             calibration_file: 캘리브레이션 파일 경로
-            screen_width: 화면 너비
-            screen_height: 화면 높이
             method: 캘리브레이션 방식 (기본값: nine_point)
-            samples_count: 샘플 수 (기본값: 0)
         """
-        user_id = self.get_or_create_user(username)
+        user_id = self.get_demo_user_id()
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
-                INSERT INTO calibrations 
-                (user_id, calibration_file, screen_width, screen_height, method, samples_count)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO calibrations (user_id, calibration_file, method)
+                VALUES (?, ?, ?)
                 """,
-                (user_id, calibration_file, screen_width, screen_height, method, samples_count)
+                (user_id, calibration_file, method)
             )
             conn.commit()
-            print(f"[Database] {username}의 캘리브레이션 기록됨: {calibration_file}")
+            print(f"[Database] 캘리브레이션 저장됨: {calibration_file}")
     
-    def get_user_calibrations(self, username: str) -> List[Dict]:
-        """사용자의 모든 캘리브레이션을 가져옵니다.
+    def get_calibrations(self) -> List[Dict]:
+        """모든 캘리브레이션을 가져옵니다 (데모는 1명).
         
-        Args:
-            username: 사용자명
-            
         Returns:
             캘리브레이션 정보 딕셔너리 목록
         """
+        user_id = self.get_demo_user_id()
+        
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
             cursor.execute(
                 """
-                SELECT c.* FROM calibrations c
-                JOIN users u ON c.user_id = u.id
-                WHERE u.username = ?
-                ORDER BY c.created_at DESC
+                SELECT * FROM calibrations
+                WHERE user_id = ?
+                ORDER BY created_at DESC
                 """,
-                (username,)
+                (user_id,)
             )
             
             return [dict(row) for row in cursor.fetchall()]
     
-    def has_calibration(self, username: str) -> bool:
-        """사용자가 캘리브레이션을 가지고 있는지 확인합니다.
+    def has_calibration(self) -> bool:
+        """캘리브레이션이 있는지 확인합니다.
         
-        Args:
-            username: 사용자명
-            
         Returns:
             캘리브레이션 유무
         """
-        calibrations = self.get_user_calibrations(username)
+        calibrations = self.get_calibrations()
         return len(calibrations) > 0
     
-    def get_latest_calibration(self, username: str) -> Optional[str]:
-        """사용자의 최신 캘리브레이션 파일을 가져옵니다.
+    def get_latest_calibration(self) -> Optional[str]:
+        """최신 캘리브레이션 파일을 가져옵니다.
         
-        Args:
-            username: 사용자명
-            
         Returns:
             최신 캘리브레이션 파일 경로 또는 None
         """
-        calibrations = self.get_user_calibrations(username)
+        calibrations = self.get_calibrations()
         if calibrations:
             return calibrations[0]['calibration_file']
         return None
-    
-    def get_user_stats(self, username: str) -> Dict:
-        """사용자의 통계를 가져옵니다.
-        
-        Args:
-            username: 사용자명
-            
-        Returns:
-            사용자 통계 정보
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            
-            # 사용자 정보 조회
-            cursor.execute(
-                """
-                SELECT 
-                    u.id,
-                    u.username,
-                    u.created_at,
-                    u.last_login,
-                    COUNT(DISTINCT c.id) as calibration_count,
-                    COUNT(DISTINCT l.id) as login_count
-                FROM users u
-                LEFT JOIN calibrations c ON u.id = c.user_id
-                LEFT JOIN login_history l ON u.id = l.user_id
-                WHERE u.username = ?
-                GROUP BY u.id
-                """,
-                (username,)
-            )
-            
-            result = cursor.fetchone()
-            if result:
-                return {
-                    "user_id": result[0],
-                    "username": result[1],
-                    "created_at": result[2],
-                    "last_login": result[3],
-                    "calibration_count": result[4],
-                    "login_count": result[5]
-                }
-            return {}
-    
-    def get_all_users(self) -> List[Dict]:
-        """모든 사용자를 가져옵니다.
-        
-        Returns:
-            사용자 정보 딕셔너리 목록 (최근 로그인 순)
-        """
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            cursor.execute(
-                """
-                SELECT 
-                    u.*,
-                    COUNT(c.id) as calibration_count
-                FROM users u
-                LEFT JOIN calibrations c ON u.id = c.user_id
-                GROUP BY u.id
-                ORDER BY u.last_login DESC
-                """
-            )
-            
-            return [dict(row) for row in cursor.fetchall()]
     
     # =========================================================================
     # 기기 관리 (AI Server 동기화)
     # =========================================================================
     
-    def sync_devices(self, user_id: int, devices: List[Dict]):
-        """AI Server에서 가져온 기기 목록을 로컬 DB에 동기화합니다.
+    def sync_devices(self, devices: List[Dict]):
+        """AI Server에서 가져온 기기 목록을 로컬 DB에 동기화합니다 (데모는 1명).
         
         Args:
-            user_id: 사용자 ID
             devices: AI Server에서 가져온 기기 목록
                 [{
                     "device_id": "ac_001",
@@ -305,19 +199,19 @@ class Database:
                     "capabilities": ["turn_on", "turn_off", ...]
                 }, ...]
         """
+        user_id = self.get_demo_user_id()
+        
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
             for device in devices:
-                # JSON으로 capabilities 저장
-                import json
                 capabilities_json = json.dumps(device.get("capabilities", []))
                 
                 cursor.execute(
                     """
                     INSERT OR REPLACE INTO devices 
-                    (user_id, device_id, device_name, device_type, capabilities, last_synced)
-                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    (user_id, device_id, device_name, device_type, capabilities)
+                    VALUES (?, ?, ?, ?, ?)
                     """,
                     (
                         user_id,
@@ -329,17 +223,16 @@ class Database:
                 )
             
             conn.commit()
-            print(f"[Database] {len(devices)}개 기기 동기화됨 (user_id={user_id})")
+            print(f"[Database] {len(devices)}개 기기 동기화됨")
     
-    def get_user_devices(self, user_id: int) -> List[Dict]:
-        """사용자의 기기 목록을 로컬 DB에서 가져옵니다.
-        
-        Args:
-            user_id: 사용자 ID
+    def get_devices(self) -> List[Dict]:
+        """기기 목록을 로컬 DB에서 가져옵니다 (데모는 1명).
         
         Returns:
             기기 목록
         """
+        user_id = self.get_demo_user_id()
+        
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
@@ -348,7 +241,7 @@ class Database:
                 """
                 SELECT * FROM devices
                 WHERE user_id = ?
-                ORDER BY last_synced DESC
+                ORDER BY id DESC
                 """,
                 (user_id,)
             )
@@ -356,8 +249,6 @@ class Database:
             devices = []
             for row in cursor.fetchall():
                 device = dict(row)
-                # JSON 파싱
-                import json
                 try:
                     device["capabilities"] = json.loads(device.get("capabilities", "[]"))
                 except:
