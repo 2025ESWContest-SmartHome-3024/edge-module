@@ -19,7 +19,6 @@ router = APIRouter()
 
 class CalibrationMethod(str, Enum):
     """캘리브레이션 방식."""
-    FIVE_POINT = "five_point"
     NINE_POINT = "nine_point"
 
 
@@ -45,9 +44,9 @@ class CalibrationPoint(BaseModel):
 
 class CalibrationStartRequest(BaseModel):
     """캘리브레이션 시작 요청."""
-    method: CalibrationMethod = Field(default=CalibrationMethod.FIVE_POINT)
-    screen_width: int = Field(default=1920)
-    screen_height: int = Field(default=1080)
+    method: CalibrationMethod = Field(default=CalibrationMethod.NINE_POINT)
+    screen_width: int = Field(default=1024)  # 라즈베리파이 기본 해상도
+    screen_height: int = Field(default=600)  # 라즈베리파이 기본 해상도
     margin_ratio: float = Field(default=0.10, ge=0.05, le=0.2)
 
 
@@ -140,22 +139,18 @@ class CalibrationSession:
         self.collected_targets: List[List[int]] = []
         
     def _generate_points(self) -> List[CalibrationPoint]:
-        """방식에 따라 캘리브레이션 포인트를 생성합니다.
+        """9점 캘리브레이션 포인트를 생성합니다.
         
         Returns:
             캘리브레이션 포인트 목록
         """
-        if self.method == CalibrationMethod.FIVE_POINT:
-            # 중심 + 4개 모서리
-            order = [(1, 1), (0, 0), (2, 0), (0, 2), (2, 2)]
-        else:  # NINE_POINT
-            # 3x3 그리드
-            order = [
-                (1, 1),  # 중심
-                (0, 0), (0, 1), (0, 2),  # 상단 줄
-                (1, 0), (1, 2),  # 중간 측면
-                (2, 0), (2, 1), (2, 2),  # 하단 줄
-            ]
+        # 3x3 그리드 (중심 먼저, 그 다음 주변)
+        order = [
+            (1, 1),  # 중심
+            (0, 0), (0, 1), (0, 2),  # 상단 줄
+            (1, 0), (1, 2),  # 중간 측면
+            (2, 0), (2, 1), (2, 2),  # 하단 줄
+        ]
         
         points = self._compute_grid_points(order)
         return [
@@ -234,9 +229,16 @@ class CalibrationSession:
 @router.post("/start", response_model=CalibrationStartResponse)
 async def start_calibration(request: CalibrationStartRequest):
     """
-    Start a new calibration session.
+    캘리브레이션 세션을 시작합니다.
     
-    Returns calibration points and session ID.
+    ⭐ 시선 추적 설정:
+    - 모델: Ridge 회귀 (가볍고 빠름)
+    - 필터: NoOp (필터링 비활성화)
+    - 화면: 1024x600 (라즈베리파이 최적화)
+    - 포인트: 9점 (3x3 그리드)
+    
+    Returns:
+        캘리브레이션 포인트와 세션 ID
     """
     # Generate unique session ID
     session_id = f"calib_{int(time.time() * 1000)}"
@@ -362,6 +364,10 @@ async def next_calibration_point(request: CalibrationNextPointRequest):
 async def complete_calibration(request: CalibrationCompleteRequest):
     """캘리브레이션을 완료하고 모델을 훈련합니다.
     
+    ⭐ 간소화된 설정:
+    - 모델: Ridge 회귀 (가볍고 빠름)
+    - 필터: NoOp (필터링 비활성화 - 라즈베리파이 최적화)
+    
     Args:
         request: 캘리브레이션 완료 요청
         
@@ -397,9 +403,9 @@ async def complete_calibration(request: CalibrationCompleteRequest):
         features_array = np.array(session.collected_features)
         targets_array = np.array(session.collected_targets)
         
-        print(f"[Calibration] {len(features_array)}개 샘플로 훈련 중")
+        print(f"[Calibration] {len(features_array)}개 샘플로 Ridge 모델 훈련 중...")
         
-        # 모델 훈련
+        # 모델 훈련 (Ridge 회귀)
         gaze_tracker.gaze_estimator.train(features_array, targets_array)
         gaze_tracker.calibrated = True
         
@@ -428,16 +434,15 @@ async def complete_calibration(request: CalibrationCompleteRequest):
         session.status = CalibrationStatus.COMPLETED
         session.message = "캘리브레이션 완료됨"
         
-        print(f"[Calibration] 세션 {request.session_id}: 훈련 완료, 저장 위치: {save_path}")
+        print(f"[Calibration] 세션 {request.session_id}: Ridge 모델 훈련 완료")
+        print(f"[Calibration] 저장 위치: {save_path}")
         print(f"[Calibration] 사용자 {username}를 위해 데이터베이스에 기록됨")
-        
-        # 세션은 유지 (Kalman 튜닝에서 사용할 수 있도록)
         
         return CalibrationCompleteResponse(
             success=True,
             message="캘리브레이션 완료 및 모델 저장됨",
             save_path=save_path,
-            accuracy=None  # TODO: 검증 정확도 계산
+            accuracy=None
         )
         
     except Exception as e:
@@ -451,6 +456,7 @@ async def complete_calibration(request: CalibrationCompleteRequest):
             save_path=None,
             accuracy=None
         )
+
 
 
 @router.delete("/cancel/{session_id}")
@@ -474,97 +480,6 @@ async def cancel_calibration(session_id: str):
         "success": True,
         "message": f"캘리브레이션 세션 {session_id} 취소됨"
     }
-
-
-@router.post("/tune-kalman")
-async def tune_kalman_filter():
-    """캘리브레이션 후 Kalman 필터를 미세 조정합니다.
-    
-    3개의 추가 포인트를 표시하고 분산 데이터를 수집합니다.
-    
-    Returns:
-        튜닝 결과
-    """
-    from backend.api.main import gaze_tracker
-    
-    if gaze_tracker is None:
-        raise HTTPException(status_code=500, detail="시선 추적기가 초기화되지 않았습니다")
-    
-    if not gaze_tracker.calibrated:
-        raise HTTPException(status_code=400, detail="먼저 모델을 캘리브레이션해야 합니다")
-    
-    try:
-        print("[Calibration API] Kalman 필터 튜닝 시작...")
-        success = gaze_tracker.tune_kalman_filter()
-        
-        if success:
-            return {
-                "success": True,
-                "message": "Kalman 필터 튜닝 성공"
-            }
-        else:
-            return {
-                "success": False,
-                "message": "Kalman 튜닝 실패 또는 적용 불가능"
-            }
-    except Exception as e:
-        print(f"[Calibration API] Kalman 튜닝 오류: {e}")
-        raise HTTPException(status_code=500, detail=f"튜닝 실패: {str(e)}")
-
-
-class UpdateKalmanVarianceRequest(BaseModel):
-    """Kalman 필터 분산 업데이트 요청."""
-    variance_x: float
-    variance_y: float
-
-
-@router.post("/update-kalman-variance")
-async def update_kalman_variance(request: UpdateKalmanVarianceRequest):
-    """웹 UI 튜닝에서 Kalman 필터 측정 잡음 공분산을 업데이트합니다.
-    
-    Args:
-        request: 분산 업데이트 요청
-        
-    Returns:
-        업데이트 결과
-    """
-    from backend.api.main import gaze_tracker
-    
-    if gaze_tracker is None:
-        raise HTTPException(status_code=500, detail="시선 추적기가 초기화되지 않았습니다")
-    
-    if not gaze_tracker.calibrated:
-        raise HTTPException(status_code=400, detail="먼저 모델을 캘리브레이션해야 합니다")
-    
-    try:
-        from model.filters import KalmanSmoother
-        
-        if not isinstance(gaze_tracker.smoother, KalmanSmoother):
-            return {
-                "success": False,
-                "message": "Kalman 필터를 사용하지 않습니다"
-            }
-        
-        # 측정 잡음 공분산 업데이트
-        variance_matrix = np.array([
-            [request.variance_x, 0],
-            [0, request.variance_y]
-        ], dtype=np.float32)
-        
-        gaze_tracker.smoother.kf.measurementNoiseCov = variance_matrix
-        
-        print(f"[Calibration API] Kalman 분산 업데이트됨: X={request.variance_x:.2f}, Y={request.variance_y:.2f}")
-        
-        return {
-            "success": True,
-            "message": "Kalman 필터 분산 업데이트됨",
-            "variance_x": request.variance_x,
-            "variance_y": request.variance_y
-        }
-        
-    except Exception as e:
-        print(f"[Calibration API] Kalman 분산 업데이트 오류: {e}")
-        raise HTTPException(status_code=500, detail=f"업데이트 실패: {str(e)}")
 
 
 @router.get("/list")
@@ -598,3 +513,4 @@ async def list_calibration_files():
         "calibrations": calibration_files,
         "directory": str(calib_dir)
     }
+
