@@ -11,13 +11,13 @@ export default defineConfig({
         port: 3000,
         proxy: {
             '/api': {
-                // REST API 요청을 백엔드 서버로 프록시
-                target: 'http://127.0.0.1:8000',
+                // REST API 요청을 백엔드 서버로 프록시 (포트 8080)
+                target: 'http://127.0.0.1:8080',
                 changeOrigin: true,
             },
             '/ws': {
-                // WebSocket 연결을 백엔드 서버로 프록시
-                target: 'ws://127.0.0.1:8000',
+                // WebSocket 연결을 백엔드 서버로 프록시 (포트 8080)
+                target: 'ws://127.0.0.1:8080',
                 ws: true,
             },
         },
