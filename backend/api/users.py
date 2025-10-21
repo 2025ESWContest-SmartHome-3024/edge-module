@@ -49,14 +49,14 @@ async def login_user(request: LoginRequest):
     if not username:
         raise HTTPException(status_code=400, detail="사용자명은 비워둘 수 없습니다")
     
-    # 로그인 기록
+    # 1️⃣ 로그인 기록 (로컬 SQLite)
     db.record_login(username)
     
-    # 사용자가 캘리브레이션을 가지고 있는지 확인
+    # 2️⃣ 사용자가 캘리브레이션을 가지고 있는지 확인
     has_calibration = db.has_calibration(username)
     calibration_file = db.get_latest_calibration(username) if has_calibration else None
     
-    # 캘리브레이션이 있으면 백엔드에서 로드
+    # 3️⃣ 캘리브레이션이 있으면 백엔드에서 로드
     if has_calibration and calibration_file:
         try:
             from backend.api.main import gaze_tracker
@@ -77,6 +77,26 @@ async def login_user(request: LoginRequest):
             print(f"[User API] {username}의 캘리브레이션 로드 실패: {e}")
             import traceback
             traceback.print_exc()
+    
+    # 4️⃣ AI Server에 사용자 정보 전송 (비동기, 오류 무시)
+    try:
+        from backend.services.ai_client import ai_client
+        import asyncio
+        
+        # user_id 가져오기
+        user_id = db.get_or_create_user(username)
+        
+        # 비동기 백그라운드 작업으로 실행 (로그인 응답을 지연시키지 않음)
+        asyncio.create_task(
+            ai_client.register_user_async(
+                user_id=str(user_id),  # ← AI Server에 user_id 전달
+                username=username,
+                has_calibration=has_calibration
+            )
+        )
+        print(f"[User API] AI Server 등록 요청 발송됨 (user_id={user_id})")
+    except Exception as e:
+        print(f"[User API] AI Server 사용자 등록 실패 (로컬만 사용): {e}")
     
     print(f"[User API] 로그인: {username}, 캘리브레이션 여부: {has_calibration}")
     

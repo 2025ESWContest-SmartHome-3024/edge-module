@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 import random
+import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from backend.services.ai_client import ai_client
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class Recommendation(BaseModel):
@@ -26,8 +29,21 @@ class Recommendation(BaseModel):
     timestamp: str
 
 
-# Mock 추천 데이터
-# 프로덕션 환경에서는 ML 모델 또는 규칙 기반 AI를 사용합니다
+class RecommendationRequest(BaseModel):
+    """AI Server에서 보내는 추천 요청."""
+    title: str = Field(..., description="추천 제목")
+    contents: str = Field(..., description="추천 내용")
+
+
+class RecommendationResponse(BaseModel):
+    """사용자 피드백 응답."""
+    message: str = "추천 문구 유저 피드백"
+    confirm: str = Field(..., description="YES 또는 NO")
+
+
+# Mock 추천 데이터 (Fallback용)
+# AI 서버가 응답하지 않을 때만 사용합니다.
+# 프로덕션: AI 서버의 GET /api/gaze/recommendations/{user_id}에서 조회
 MOCK_RECOMMENDATIONS = [
     {
         "title": "에어컨 온도 조절",
@@ -72,9 +88,62 @@ MOCK_RECOMMENDATIONS = [
 ]
 
 
+@router.post("", response_model=RecommendationResponse)
+async def receive_recommendation(request: RecommendationRequest):
+    """
+    AI Server로부터 사용자에게 보낼 추천을 받습니다.
+    
+    API 문서:
+    - Request Method: POST
+    - URL: /api/recommendations
+    - Body:
+        {
+            "title": "에어컨 킬까요?",
+            "contents": "현재 온도가 25도이므로 에어컨을 키시는 것을 추천드립니다."
+        }
+    - Response (200):
+        {
+            "message": "추천 문구 유저 피드백",
+            "confirm": "YES" or "NO"
+        }
+    
+    Args:
+        request: AI Server에서 보낸 추천
+    
+    Returns:
+        사용자 피드백
+    """
+    try:
+        logger.info(f"AI Server로부터 추천 수신: {request.title}")
+        logger.info(f"추천 내용: {request.contents}")
+        
+        # TODO: 프론트엔드에 추천 표시
+        # 사용자가 YES 또는 NO를 선택할 때까지 대기
+        # WebSocket을 통해 실시간으로 업데이트
+        
+        # 지금은 예시로 YES 반환
+        confirm = "YES"
+        
+        logger.info(f"사용자 피드백: {confirm}")
+        
+        return RecommendationResponse(
+            message="추천 문구 유저 피드백",
+            confirm=confirm
+        )
+        
+    except Exception as e:
+        logger.error(f"추천 처리 실패: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"추천 처리 실패: {str(e)}"
+        )
+
+
 @router.get("", response_model=list[Recommendation])
 async def get_recommendations(limit: int = 5):
     """AI 기반 디바이스 제어 추천을 가져옵니다.
+    
+    프로덕션: AI 서버에서 현재 상황에 맞는 추천을 조회합니다.
     
     Args:
         limit: 반환할 최대 추천 수
@@ -82,14 +151,49 @@ async def get_recommendations(limit: int = 5):
     Returns:
         추천 목록
     """
-    # 프로덕션 환경에서는:
-    # 1. 센서 데이터 수집 (온도, 습도, PM2.5 등)
-    # 2. 현재 디바이스 상태 확인
-    # 3. 사용자 선호도 및 히스토리 확인
-    # 4. ML 모델 또는 규칙 기반 시스템 실행
-    # 5. 개인화된 추천 생성
-    
-    # 현재는 mock 데이터 반환
+    try:
+        # TODO: JWT 토큰에서 user_id, session_id 추출
+        user_id = "user_001"
+        session_id = "session_xyz"
+        
+        # AI 서버에서 추천 조회
+        ai_recommendations = await ai_client.get_recommendations(
+            user_id=user_id,
+            session_id=session_id,
+            limit=limit
+        )
+        
+        if ai_recommendations:
+            # AI 서버에서 받은 추천을 변환
+            recommendations = []
+            for idx, rec in enumerate(ai_recommendations):
+                recommendations.append(Recommendation(
+                    id=f"rec_{idx}_{int(datetime.now().timestamp())}",
+                    title=rec.get("title", "추천"),
+                    description=rec.get("reason", ""),
+                    device_id=rec.get("device_id", ""),
+                    device_name=rec.get("device_name", ""),
+                    action=rec.get("action", ""),
+                    params=rec.get("params", {}),
+                    reason=rec.get("reason", ""),
+                    priority=rec.get("priority", 3),
+                    timestamp=datetime.now().isoformat()
+                ))
+            
+            logger.info(f"AI 서버에서 {len(recommendations)}개 추천 조회됨")
+            return recommendations
+        else:
+            # AI 서버 실패 시 Mock 데이터 사용
+            logger.warning("AI 서버 추천 실패, Mock 데이터 사용")
+            return get_mock_recommendations(limit)
+            
+    except Exception as e:
+        logger.error(f"추천 조회 실패: {e}, Mock 데이터 사용")
+        return get_mock_recommendations(limit)
+
+
+def get_mock_recommendations(limit: int) -> list[Recommendation]:
+    """Mock 추천 데이터 반환."""
     recommendations = []
     
     # 데모 목적으로 무작위로 추천 선택
@@ -165,15 +269,32 @@ async def submit_feedback(feedback: RecommendationFeedback):
     Returns:
         피드백 수신 결과
     """
-    # 프로덕션 환경에서는 피드백을 데이터베이스에 저장하고 모델 훈련에 사용합니다
-    print(f"[Recommendations] 피드백 수신됨: {feedback}")
-    
-    return {
-        "success": True,
-        "message": "피드백을 수신했습니다",
-        "recommendation_id": feedback.recommendation_id,
-        "accepted": feedback.accepted
-    }
+    try:
+        # AI 서버로 피드백 전송
+        ai_response = await ai_client.send_feedback({
+            "recommendation_id": feedback.recommendation_id,
+            "accepted": feedback.accepted,
+            "rating": feedback.rating,
+            "comment": feedback.comment,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        logger.info(f"피드백 AI 서버로 전송됨: {feedback.recommendation_id}")
+        
+        return {
+            "success": True,
+            "message": "피드백을 수신했습니다",
+            "recommendation_id": feedback.recommendation_id,
+            "accepted": feedback.accepted
+        }
+        
+    except Exception as e:
+        logger.error(f"피드백 전송 실패: {e}")
+        return {
+            "success": False,
+            "message": f"피드백 처리 중 오류 발생: {str(e)}",
+            "recommendation_id": feedback.recommendation_id
+        }
 
 
 class SensorData(BaseModel):

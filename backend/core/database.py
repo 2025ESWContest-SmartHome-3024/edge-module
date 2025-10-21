@@ -57,12 +57,27 @@ class Database:
                 )
             """)
             
+            # 기기 테이블 (AI Server에서 가져온 기기 목록 캐싱)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS devices (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    device_id TEXT NOT NULL,
+                    device_name TEXT NOT NULL,
+                    device_type TEXT,
+                    capabilities TEXT,
+                    last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    UNIQUE(user_id, device_id)
+                )
+            """)
+            
             # 로그인 기록 테이블
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS login_history (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     user_id INTEGER NOT NULL,
-                    login_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    login_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES users(id)
                 )
             """)
@@ -272,6 +287,84 @@ class Database:
             )
             
             return [dict(row) for row in cursor.fetchall()]
+    
+    # =========================================================================
+    # 기기 관리 (AI Server 동기화)
+    # =========================================================================
+    
+    def sync_devices(self, user_id: int, devices: List[Dict]):
+        """AI Server에서 가져온 기기 목록을 로컬 DB에 동기화합니다.
+        
+        Args:
+            user_id: 사용자 ID
+            devices: AI Server에서 가져온 기기 목록
+                [{
+                    "device_id": "ac_001",
+                    "device_name": "에어컨",
+                    "device_type": "airconditioner",
+                    "capabilities": ["turn_on", "turn_off", ...]
+                }, ...]
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            
+            for device in devices:
+                # JSON으로 capabilities 저장
+                import json
+                capabilities_json = json.dumps(device.get("capabilities", []))
+                
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO devices 
+                    (user_id, device_id, device_name, device_type, capabilities, last_synced)
+                    VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """,
+                    (
+                        user_id,
+                        device.get("device_id"),
+                        device.get("device_name"),
+                        device.get("device_type"),
+                        capabilities_json
+                    )
+                )
+            
+            conn.commit()
+            print(f"[Database] {len(devices)}개 기기 동기화됨 (user_id={user_id})")
+    
+    def get_user_devices(self, user_id: int) -> List[Dict]:
+        """사용자의 기기 목록을 로컬 DB에서 가져옵니다.
+        
+        Args:
+            user_id: 사용자 ID
+        
+        Returns:
+            기기 목록
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute(
+                """
+                SELECT * FROM devices
+                WHERE user_id = ?
+                ORDER BY last_synced DESC
+                """,
+                (user_id,)
+            )
+            
+            devices = []
+            for row in cursor.fetchall():
+                device = dict(row)
+                # JSON 파싱
+                import json
+                try:
+                    device["capabilities"] = json.loads(device.get("capabilities", "[]"))
+                except:
+                    device["capabilities"] = []
+                devices.append(device)
+            
+            return devices
 
 
 # 전역 데이터베이스 인스턴스
