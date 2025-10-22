@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Settings, Filter, Sliders, Info, CheckCircle, AlertCircle } from 'lucide-react'
+import { Settings, Filter, Sliders, Info, CheckCircle, AlertCircle, RotateCw } from 'lucide-react'
 import './SettingsPage.css'
 
 /**
@@ -21,6 +21,8 @@ function SettingsPage() {
     const [message, setMessage] = useState('')
     // 메시지 타입 (info, success, error)
     const [messageType, setMessageType] = useState('info')
+    // 재보정 진행 중 여부
+    const [recalibratingLoading, setRecalibratingLoading] = useState(false)
 
     /**
      * 초기화: 설정 로드, 주기적으로 추적기 정보 갱신
@@ -129,6 +131,31 @@ function SettingsPage() {
         if (value < 2.0) return '균형'
         if (value < 5.0) return '부드러움'
         return '매우 부드러움 (지연 있음)'
+    }
+
+    /**
+     * 재보정 요청
+     */
+    const handleRecalibration = async () => {
+        setRecalibratingLoading(true)
+        setMessage('재보정 페이지로 이동하는 중...')
+        setMessageType('info')
+
+        try {
+            // 재보정 상태를 localStorage에 저장
+            localStorage.setItem('gazehome_needs_recalibration', 'true')
+            
+            // 1초 후 보정 페이지로 이동
+            setTimeout(() => {
+                window.location.href = '/calibration'
+            }, 500)
+        } catch (error) {
+            console.error('재보정 요청 실패:', error)
+            setMessage('재보정 요청 실패')
+            setMessageType('error')
+            setRecalibratingLoading(false)
+            setTimeout(() => setMessage(''), 3000)
+        }
     }
 
     return (
@@ -281,6 +308,34 @@ function SettingsPage() {
                         <li><strong>수동 조정:</strong> 슬라이더로 반응속도와 부드러움 조절</li>
                         <li><strong>권장 설정:</strong> 0.2 (기본값) - 균형잡힌 성능</li>
                     </ul>
+                </section>
+
+                {/* 재보정 섹션 */}
+                <section className="settings-section calibration-section">
+                    <div className="section-header">
+                        <RotateCw size={24} />
+                        <h2>시선 보정</h2>
+                    </div>
+                    <p className="calibration-description">
+                        시선 추적 정확도가 떨어졌거나 다시 보정하고 싶으신 경우, 아래 버튼을 클릭하세요.
+                    </p>
+                    <button
+                        className="recalibration-button"
+                        onClick={handleRecalibration}
+                        disabled={recalibratingLoading}
+                    >
+                        {recalibratingLoading ? (
+                            <>
+                                <span className="loading-spinner"></span>
+                                이동 중...
+                            </>
+                        ) : (
+                            <>
+                                <RotateCw size={20} />
+                                재보정 시작
+                            </>
+                        )}
+                    </button>
                 </section>
             </div>
         </div>
