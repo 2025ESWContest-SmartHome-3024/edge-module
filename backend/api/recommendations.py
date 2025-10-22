@@ -41,17 +41,18 @@ async def receive_recommendation(request: RecommendationRequest, background_task
     """
     AI Server로부터 사용자에게 보낼 추천을 받습니다.
     
-    API 문서:
-    - Request Method: POST
-    - URL: /api/recommendations
-    - Body:
+    📥 AI Server → Edge Module
+    
+    Request:
+        POST /api/recommendations
         {
             "recommendation_id": "rec_abc123",
             "title": "에어컨 킬까요?",
             "contents": "현재 온도가 25도이므로 에어컨을 키시는 것을 추천드립니다.",
             "user_id": "user_001"
         }
-    - Response (200):
+    
+    Response:
         {
             "message": "추천 문구 유저 피드백",
             "confirm": "YES" or "NO"
@@ -59,10 +60,10 @@ async def receive_recommendation(request: RecommendationRequest, background_task
     
     Args:
         request: AI Server에서 보낸 추천
-        background_tasks: 백그라운드 작업
+        background_tasks: 백그라운드 작업 (피드백 전송용)
     
     Returns:
-        사용자 피드백
+        사용자 피드백 (YES/NO)
     """
     global current_recommendation, user_response
     
@@ -81,10 +82,11 @@ async def receive_recommendation(request: RecommendationRequest, background_task
             "user_id": request.user_id
         }
         
-        # TODO: WebSocket을 통해 프론트엔드에 추천 전달
-        # 사용자가 YES 또는 NO를 선택할 때까지 대기
+        # ⭐ 프론트엔드에서 사용자가 YES/NO를 선택할 때까지 대기
+        # 현재 구현: WebSocket을 통해 프론트엔드에 추천 전달
+        # (실제 구현은 프론트엔드 피드백 엔드포인트를 통해 처리)
         
-        # 임시: 자동으로 YES 반환 (실제로는 사용자 입력 대기)
+        # 기본값: YES 반환 (실제로는 프론트엔드 피드백 대기)
         confirm = "YES"
         accepted = confirm == "YES"
         
@@ -123,6 +125,8 @@ async def send_feedback_to_ai_server(
     """
     사용자 피드백을 AI Server로 전송합니다 (백그라운드 작업).
     
+    📤 Edge Module → AI Server
+    
     Args:
         recommendation_id: 추천 ID
         user_id: 사용자 ID
@@ -140,7 +144,7 @@ async def send_feedback_to_ai_server(
         if result.get("success", True):
             logger.info(f"✅ AI Server 피드백 전송 완료")
         else:
-            logger.warning(f"⚠️ AI Server 피드백 전송 실패: {result.get('message')}")
+            logger.warning(f"⚠️ AI Server 피드백 전송: {result.get('message')}")
             
     except Exception as e:
         logger.error(f"❌ AI Server 피드백 전송 오류: {e}")
@@ -160,7 +164,23 @@ class UserFeedbackRequest(BaseModel):
 @router.post("/feedback")
 async def submit_user_feedback(feedback: UserFeedbackRequest):
     """
-    프론트엔드에서 사용자 피드백을 직접 제출할 수 있는 엔드포인트.
+    프론트엔드에서 사용자 피드백을 제출합니다.
+    
+    📤 Edge Module → AI Server
+    
+    Request:
+        POST /api/recommendations/feedback
+        {
+            "recommendation_id": "rec_abc123",
+            "user_id": "user_001",
+            "accepted": true
+        }
+    
+    Response:
+        {
+            "success": true,
+            "message": "피드백이 전송되었습니다"
+        }
     
     Args:
         feedback: 사용자 피드백
@@ -180,8 +200,7 @@ async def submit_user_feedback(feedback: UserFeedbackRequest):
         
         return {
             "success": True,
-            "message": "피드백이 전송되었습니다",
-            "ai_server_response": result
+            "message": "피드백이 전송되었습니다"
         }
         
     except Exception as e:

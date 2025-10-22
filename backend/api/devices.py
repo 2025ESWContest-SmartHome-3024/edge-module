@@ -71,26 +71,31 @@ async def handle_device_click(device_id: str, request: dict):
     
     POST /api/devices/{device_id}/click
     Body: {"command": "turn_on"}
+    
+    Returns:
+        {
+            "success": true,
+            "device_id": "b403...",
+            "recommendation": {
+                "recommendation_id": "rec_abc123",
+                "title": "에어컨 킬까요?",
+                "contents": "현재 온도가 25도이므로...",
+                "confidence": 0.95
+            }
+        }
     """
     try:
         logger.info(f"🎯 기기 제어: {device_id}")
         
         demo_user_id = db.get_demo_user_id()
         
-        # ai_client.send_device_click 메서드의 올바른 시그니처
-        # 전체 gaze_click_request Dict를 전달해야 함
+        # AI Server로 기기 클릭 이벤트 전송
         gaze_click_request = {
             "user_id": str(demo_user_id),
-            "session_id": f"session_{device_id}_{datetime.now(KST).timestamp()}",
-            "clicked_device": {
-                "device_id": device_id,
-                "name": device_id,
-                "type": "unknown"
-            },
-            "timestamp": datetime.now(KST).isoformat(),
-            "context": {
-                "command": request.get("command", "toggle")
-            }
+            "device_id": device_id,
+            "device_name": device_id,
+            "device_type": "unknown",
+            "timestamp": datetime.now(KST).isoformat()
         }
         
         result = await ai_client.send_device_click(gaze_click_request)
@@ -100,7 +105,7 @@ async def handle_device_click(device_id: str, request: dict):
         return {
             "success": True,
             "device_id": device_id,
-            "result": result
+            "recommendation": result.get("recommendation")
         }
     
     except Exception as e:

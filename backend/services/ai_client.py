@@ -46,35 +46,29 @@ class AIServiceClient:
         """
         기기 클릭 이벤트를 AI 서버로 전송합니다.
         
-        ⭐ AI Server가 응답에 추천을 포함해서 반환합니다.
+        ⭐ AI Server는 LG Gateway를 통해 기기를 제어하고,
+           추천 메시지를 반환합니다.
         
         Args:
             gaze_click_request: {
                 "user_id": "user_001",
-                "session_id": "session_xyz_1729443600",
-                "clicked_device": {
-                    "device_id": "ac_001",
-                    "name": "에어컨",
-                    "type": "airconditioner"
-                },
-                "timestamp": "2024-10-21T10:30:00+09:00",
-                "context": {}
+                "device_id": "b403...",
+                "device_name": "에어컨",
+                "device_type": "air_conditioner",
+                "timestamp": "2024-10-21T10:30:00+09:00"
             }
         
         Returns:
-            AI 서버 응답 (추천 포함):
+            AI 서버 응답:
             {
                 "status": "success",
-                "click_id": "click_abc123",
                 "recommendation": {
                     "recommendation_id": "rec_abc123",
-                    "action": "turn_on",
-                    "device_id": "ac_001",
-                    "device_name": "에어컨",
-                    "reason": "현재 온도가 28도로 높습니다",
+                    "title": "에어컨 킬까요?",
+                    "contents": "현재 온도가 25도이므로...",
                     "confidence": 0.95
                 },
-                "message": "클릭 이벤트 저장 및 추천 생성됨"
+                "message": "클릭 이벤트 처리됨"
             }
         """
         url = f"{self.base_url}/api/gaze/click"
@@ -141,13 +135,26 @@ class AIServiceClient:
         """
         사용자의 기기 목록을 AI 서버에서 조회합니다.
         
+        AI Server는 LG Gateway의 /api/lg/devices에서 조회한 기기 목록을 반환합니다.
+        
         Args:
             user_id: 사용자 ID
         
         Returns:
-            기기 목록
+            기기 목록 (LG Gateway 형식):
+            [
+                {
+                    "deviceId": "9c4d22060d9f...",
+                    "deviceInfo": {
+                        "deviceType": "DEVICE_AIR_PURIFIER",
+                        "modelName": "LG Air Purifier",
+                        "alias": "공기청정기",
+                        "reportable": true
+                    }
+                }
+            ]
         """
-        url = f"{self.base_url}/api/gaze/devices/{user_id}"
+        url = f"{self.base_url}/api/gaze/devices"
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -155,6 +162,7 @@ class AIServiceClient:
                 
                 response = await client.get(
                     url,
+                    params={"user_id": user_id},
                     headers={"Content-Type": "application/json"}
                 )
                 
@@ -165,18 +173,14 @@ class AIServiceClient:
                 # ✅ AI Server 응답 형식에 따라 유연하게 처리
                 devices = []
                 
-                # 방법 1: {"devices": [...]}
-                if "devices" in result:
+                # 방법 1: {"devices": [...]} - 권장
+                if isinstance(result, dict) and "devices" in result:
                     devices = result.get("devices", [])
                 
-                # 방법 2: {"data": [...]}
-                elif "data" in result:
-                    devices = result.get("data", [])
-                
-                # 방법 3: 배열 직접 반환
+                # 방법 2: 배열 직접 반환
                 elif isinstance(result, list):
                     devices = result
-                    logger.warning("⚠️ AI Server가 배열을 직접 반환함 (표준 형식 권장)")
+                    logger.warning("⚠️ AI Server가 배열을 직접 반환함 (권장: {\"devices\": [...]} 형식)")
                 
                 logger.info(f"✅ AI 서버에서 {len(devices)}개 기기 조회됨")
                 
@@ -253,11 +257,11 @@ class AIServiceClient:
         accepted: bool
     ) -> Dict[str, Any]:
         """
-        AI Server가 보낸 추천 문구에 대한 사용자 피드백을 전송합니다.
+        사용자 피드백을 AI Server로 전송합니다.
         
         동작 흐름:
-        1. AI Server → Edge Module: 추천 제목 + 내용 전송
-        2. 사용자: YES/NO 선택
+        1. AI Server → Edge Module: 추천 제목 + 내용 수신 (POST /api/recommendations)
+        2. 사용자: YES/NO 선택 (프론트엔드)
         3. Edge Module → AI Server: 피드백 전송 (이 메서드)
         
         Args:
@@ -266,9 +270,13 @@ class AIServiceClient:
             accepted: True(YES) 또는 False(NO)
         
         Returns:
-            AI 서버의 응답
+            AI 서버의 응답:
+            {
+                "status": "success",
+                "message": "피드백이 저장되었습니다"
+            }
         """
-        url = f"{self.base_url}/api/recommendations/feedback"
+        url = f"{self.base_url}/api/gaze/feedback"
         
         payload = {
             "recommendation_id": recommendation_id,
@@ -280,7 +288,7 @@ class AIServiceClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 logger.info(
-                    f"📤 AI 서버 추천 피드백 전송: POST {url}\n"
+                    f"📤 AI 서버 피드백 전송: POST {url}\n"
                     f"   - recommendation_id: {recommendation_id}\n"
                     f"   - user_id: {user_id}\n"
                     f"   - accepted: {accepted}"
@@ -296,17 +304,17 @@ class AIServiceClient:
                 
                 result = response.json()
                 logger.info(
-                    f"✅ AI 서버 추천 피드백 전송 성공\n"
+                    f"✅ AI 서버 피드백 전송 성공\n"
                     f"   - accepted: {accepted}"
                 )
                 
                 return result
                 
         except Exception as e:
-            logger.error(f"❌ AI 서버 추천 피드백 전송 실패: {e}")
+            logger.error(f"❌ AI 서버 피드백 전송 실패: {e}")
             return {
                 "success": False,
-                "message": f"추천 피드백 전송 실패: {str(e)}"
+                "message": f"피드백 전송 실패: {str(e)}"
             }
     
     # =========================================================================
