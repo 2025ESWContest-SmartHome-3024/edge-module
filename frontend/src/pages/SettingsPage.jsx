@@ -144,7 +144,7 @@ function SettingsPage() {
         try {
             // 재보정 상태를 localStorage에 저장
             localStorage.setItem('gazehome_needs_recalibration', 'true')
-            
+
             // 1초 후 보정 페이지로 이동
             setTimeout(() => {
                 window.location.href = '/calibration'
