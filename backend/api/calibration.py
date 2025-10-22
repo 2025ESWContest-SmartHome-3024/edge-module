@@ -231,12 +231,6 @@ async def start_calibration(request: CalibrationStartRequest):
     """
     캘리브레이션 세션을 시작합니다.
     
-    ⭐ 시선 추적 설정:
-    - 모델: Ridge 회귀 (가볍고 빠름)
-    - 필터: NoOp (필터링 비활성화)
-    - 화면: 1024x600 (라즈베리파이 최적화)
-    - 포인트: 9점 (3x3 그리드)
-    
     Returns:
         캘리브레이션 포인트와 세션 ID
     """

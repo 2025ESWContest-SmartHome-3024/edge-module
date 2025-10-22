@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 import logging
-import asyncio
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from typing import Optional
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.services.ai_client import ai_client
@@ -30,18 +30,19 @@ class RecommendationResponse(BaseModel):
     confirm: str = Field(..., description="YES 또는 NO")
 
 
-# 전역 변수: 현재 대기 중인 추천
-current_recommendation: dict | None = None
-user_response_event = asyncio.Event()
-user_response: str = "NO"
-
+# ============================================================================
+# 📥 AI Server → Edge Module: 추천 수신
+# ============================================================================
 
 @router.post("", response_model=RecommendationResponse)
-async def receive_recommendation(request: RecommendationRequest, background_tasks: BackgroundTasks):
+async def receive_recommendation(request: RecommendationRequest):
     """
-    AI Server로부터 사용자에게 보낼 추천을 받습니다.
+    AI Server로부터 추천을 수신합니다 (자동 호출).
     
     📥 AI Server → Edge Module
+    
+    ✅ 주의: 이 엔드포인트는 AI Server에서 자동으로 호출됨
+    기기 제어는 여기서 하지 않고, 프론트엔드의 피드백 후에 수행
     
     Request:
         POST /api/recommendations
@@ -55,54 +56,29 @@ async def receive_recommendation(request: RecommendationRequest, background_task
     Response:
         {
             "message": "추천 문구 유저 피드백",
-            "confirm": "YES" or "NO"
+            "confirm": "YES"
         }
+    
     
     Args:
         request: AI Server에서 보낸 추천
-        background_tasks: 백그라운드 작업 (피드백 전송용)
+        background_tasks: 백그라운드 작업 (미사용)
     
     Returns:
-        사용자 피드백 (YES/NO)
+        응답
     """
-    global current_recommendation, user_response
-    
     try:
-        logger.info(f"📩 AI Server로부터 추천 수신")
-        logger.info(f"   - recommendation_id: {request.recommendation_id}")
-        logger.info(f"   - 제목: {request.title}")
-        logger.info(f"   - 내용: {request.contents}")
-        logger.info(f"   - user_id: {request.user_id}")
+        logger.info(f"📩 [AI 추천 수신] recommendation_id={request.recommendation_id}")
+        logger.info(f"   - title: {request.title}")
+        logger.info(f"   - contents: {request.contents}")
         
-        # 현재 추천 저장
-        current_recommendation = {
-            "recommendation_id": request.recommendation_id,
-            "title": request.title,
-            "contents": request.contents,
-            "user_id": request.user_id
-        }
+        # ✅ 추천만 저장 (기기 제어는 하지 않음)
+        logger.info(f"✅ [추천 저장] WebSocket으로 프론트엔드에 전달 준비 완료")
         
-        # ⭐ 프론트엔드에서 사용자가 YES/NO를 선택할 때까지 대기
-        # 현재 구현: WebSocket을 통해 프론트엔드에 추천 전달
-        # (실제 구현은 프론트엔드 피드백 엔드포인트를 통해 처리)
-        
-        # 기본값: YES 반환 (실제로는 프론트엔드 피드백 대기)
-        confirm = "YES"
-        accepted = confirm == "YES"
-        
-        logger.info(f"✅ 사용자 피드백: {confirm}")
-        
-        # 백그라운드에서 AI Server로 피드백 전송
-        background_tasks.add_task(
-            send_feedback_to_ai_server,
-            request.recommendation_id,
-            request.user_id,
-            accepted
-        )
-        
+        # 기본 응답: YES (실제로는 프론트엔드에서 사용자 선택 대기)
         return RecommendationResponse(
             message="추천 문구 유저 피드백",
-            confirm=confirm
+            confirm="YES"
         )
         
     except Exception as e:
@@ -114,44 +90,7 @@ async def receive_recommendation(request: RecommendationRequest, background_task
 
 
 # ============================================================================
-# 📤 Edge Module → AI Server: 피드백 전송
-# ============================================================================
-
-async def send_feedback_to_ai_server(
-    recommendation_id: str,
-    user_id: str,
-    accepted: bool
-):
-    """
-    사용자 피드백을 AI Server로 전송합니다 (백그라운드 작업).
-    
-    📤 Edge Module → AI Server
-    
-    Args:
-        recommendation_id: 추천 ID
-        user_id: 사용자 ID
-        accepted: True(YES) 또는 False(NO)
-    """
-    try:
-        logger.info(f"🔄 AI Server로 피드백 전송 시작...")
-        
-        result = await ai_client.send_recommendation_feedback(
-            recommendation_id=recommendation_id,
-            user_id=user_id,
-            accepted=accepted
-        )
-        
-        if result.get("success", True):
-            logger.info(f"✅ AI Server 피드백 전송 완료")
-        else:
-            logger.warning(f"⚠️ AI Server 피드백 전송: {result.get('message')}")
-            
-    except Exception as e:
-        logger.error(f"❌ AI Server 피드백 전송 오류: {e}")
-
-
-# ============================================================================
-# 🎯 프론트엔드용 엔드포인트 (선택사항)
+# 🎯 프론트엔드용 엔드포인트
 # ============================================================================
 
 class UserFeedbackRequest(BaseModel):
@@ -159,27 +98,30 @@ class UserFeedbackRequest(BaseModel):
     recommendation_id: str
     user_id: str
     accepted: bool  # True(YES), False(NO)
+    device_id: Optional[str] = None  # 기기 제어용 (선택사항)
+    action: Optional[str] = None  # 기기 제어 액션 (선택사항)
 
 
 @router.post("/feedback")
 async def submit_user_feedback(feedback: UserFeedbackRequest):
     """
-    프론트엔드에서 사용자 피드백을 제출합니다.
+    프론트엔드에서 사용자 피드백(YES/NO)을 제출합니다.
     
-    📤 Edge Module → AI Server
     
     Request:
         POST /api/recommendations/feedback
         {
             "recommendation_id": "rec_abc123",
             "user_id": "user_001",
-            "accepted": true
+            "accepted": true,
+            "device_id": "ac_001",          # 기기 제어용 (선택사항)
+            "action": "turn_on"             # 기기 제어 액션 (선택사항)
         }
     
     Response:
         {
             "success": true,
-            "message": "피드백이 전송되었습니다"
+            "message": "피드백이 저장되었습니다"
         }
     
     Args:
@@ -189,18 +131,28 @@ async def submit_user_feedback(feedback: UserFeedbackRequest):
         처리 결과
     """
     try:
-        logger.info(f"📥 프론트엔드로부터 피드백 수신: {feedback.accepted}")
+        logger.info(f"📥 [사용자 피드백] accepted={feedback.accepted} ({'YES' if feedback.accepted else 'NO'})")
         
-        # AI Server로 피드백 전송
-        result = await ai_client.send_recommendation_feedback(
+        # 1️⃣ AI Server로 피드백 저장
+        feedback_result = await ai_client.send_recommendation_feedback(
             recommendation_id=feedback.recommendation_id,
             user_id=feedback.user_id,
             accepted=feedback.accepted
         )
         
+        # 2️⃣ YES인 경우 + device_id/action이 있으면 기기 제어 실행
+        if feedback.accepted and hasattr(feedback, 'device_id') and hasattr(feedback, 'action'):
+            logger.info(f"📤 [기기 제어 실행] device_id={feedback.device_id}, action={feedback.action}")
+            control_result = await ai_client.send_device_control(
+                user_id=feedback.user_id,
+                device_id=feedback.device_id,
+                action=feedback.action
+            )
+            logger.info(f"✅ [기기 제어 완료] {control_result.get('message')}")
+        
         return {
             "success": True,
-            "message": "피드백이 전송되었습니다"
+            "message": "피드백이 저장되었습니다"
         }
         
     except Exception as e:

@@ -17,12 +17,13 @@ KST = pytz.timezone('Asia/Seoul')
 class AIServiceClient:
     """AI 서버와의 HTTP 통신을 담당하는 클라이언트.
     
-    기능:
-    - 기기 클릭 이벤트를 AI 서버로 전송
-    - AI 서버의 응답에서 추천 받기 
-    - 사용자 피드백을 AI 서버로 전송
-    - 자동 재시도 + 타임아웃 처리
-    - Fallback 추천 제공
+    역할:
+    1️⃣ 기기 제어 명령 전송 (send_device_control)
+    2️⃣ 추천 피드백 전송 (send_recommendation_feedback)
+    3️⃣ 기기 목록 조회 (get_user_devices)
+    4️⃣ 사용자 등록 (register_user_async)
+    
+    주의: 추천은 AI Server에서 자동으로 옴 (요청 불필요)
     """
     
     def __init__(self):
@@ -36,96 +37,79 @@ class AIServiceClient:
         logger.info(f"   - 최대 재시도: {self.max_retries}회")
     
     # =========================================================================
-    # 1️⃣ 기기 클릭 이벤트 전송 (추천은 응답에 포함)
+    # 1️⃣ 기기 제어 명령 전송
     # =========================================================================
     
-    async def send_device_click(
-        self, 
-        gaze_click_request: Dict[str, Any]
+    async def send_device_control(
+        self,
+        user_id: str,
+        device_id: str,
+        action: str,
+        params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        기기 클릭 이벤트를 AI 서버로 전송합니다.
-        
-        ⭐ AI Server는 LG Gateway를 통해 기기를 제어하고,
-           추천 메시지를 반환합니다.
+        기기 제어 명령을 AI Server로 전송합니다.
         
         Args:
-            gaze_click_request: {
-                "user_id": "user_001",
-                "device_id": "b403...",
-                "device_name": "에어컨",
-                "device_type": "air_conditioner",
-                "timestamp": "2024-10-21T10:30:00+09:00"
-            }
+            user_id: 사용자 ID
+            device_id: 기기 ID (예: "ac_001")
+            action: 제어 액션 (예: "turn_on", "turn_off", "temp_25")
+            params: 추가 파라미터 (선택사항)
         
         Returns:
-            AI 서버 응답:
+            제어 결과:
             {
-                "status": "success",
-                "recommendation": {
-                    "recommendation_id": "rec_abc123",
-                    "title": "에어컨 킬까요?",
-                    "contents": "현재 온도가 25도이므로...",
-                    "confidence": 0.95
-                },
-                "message": "클릭 이벤트 처리됨"
+                "success": true,
+                "message": "기기 제어 완료",
+                "device_id": "ac_001",
+                "action": "turn_on"
             }
         """
-        url = f"{self.base_url}/api/gaze/click"
+        url = f"{self.base_url}/api/lg/control"
         
-        for attempt in range(self.max_retries):
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    logger.info(
-                        f"📤 AI 서버 클릭 이벤트 전송: POST {url}\n"
-                        f"   - session_id: {gaze_click_request.get('session_id')}\n"
-                        f"   - device: {gaze_click_request.get('clicked_device', {}).get('name')}\n"
-                        f"   - 시도: {attempt + 1}/{self.max_retries}"
-                    )
-                    
-                    response = await client.post(
-                        url,
-                        json=gaze_click_request,
-                        headers={"Content-Type": "application/json"}
-                    )
-                    
-                    response.raise_for_status()
-                    
-                    result = response.json()
-                    logger.info(
-                        f"✅ AI 서버 응답 성공\n"
-                        f"   - click_id: {result.get('click_id')}\n"
-                        f"   - 추천: {result.get('recommendation', {}).get('recommendation_id')}"
-                    )
-                    
-                    return result
-                    
-            except asyncio.TimeoutError:
-                logger.warning(f"⏱️ AI 서버 타임아웃 (시도 {attempt + 1}/{self.max_retries})")
-                if attempt < self.max_retries - 1:
-                    wait_time = 2 ** attempt
-                    logger.info(f"   {wait_time}초 대기 후 재시도...")
-                    await asyncio.sleep(wait_time)
-                continue
-                
-            except httpx.HTTPError as e:
-                logger.warning(f"🔴 AI 서버 HTTP 오류 (시도 {attempt + 1}/{self.max_retries}): {e}")
-                if attempt < self.max_retries - 1:
-                    wait_time = 2 ** attempt
-                    logger.info(f"   {wait_time}초 대기 후 재시도...")
-                    await asyncio.sleep(wait_time)
-                continue
-                
-            except Exception as e:
-                logger.error(f"❌ AI 서버 통신 오류: {e}")
-                if attempt < self.max_retries - 1:
-                    wait_time = 2 ** attempt
-                    await asyncio.sleep(wait_time)
-                continue
+        payload = {
+            "user_id": user_id,
+            "device_id": device_id,
+            "action": action,
+            "params": params or {},
+            "timestamp": datetime.now(KST).isoformat()
+        }
         
-        # 모든 재시도 실패 시 Fallback 반환
-        logger.warning("⚠️ AI 서버 통신 실패, Fallback 추천 사용")
-        return self._get_fallback_response(gaze_click_request)
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                logger.info(
+                    f"📤 [1️⃣ 기기 제어] AI Server로 전송: POST {url}\n"
+                    f"   - device_id: {device_id}\n"
+                    f"   - action: {action}\n"
+                    f"   - params: {params}"
+                )
+                
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                response.raise_for_status()
+                
+                result = response.json()
+                logger.info(
+                    f"✅ [기기 제어 완료]\n"
+                    f"   - device_id: {device_id}\n"
+                    f"   - action: {action}\n"
+                    f"   - message: {result.get('message')}"
+                )
+                
+                return result
+                
+        except Exception as e:
+            logger.error(f"❌ 기기 제어 실패: {e}")
+            return {
+                "success": False,
+                "message": f"기기 제어 실패: {str(e)}",
+                "device_id": device_id,
+                "action": action
+            }
     
     # =========================================================================
     # 2️⃣ 기기 목록 조회
@@ -247,7 +231,7 @@ class AIServiceClient:
             }
     
     # =========================================================================
-    # 4️⃣ 추천 문구 피드백 전송 (새로운 기능)
+    # 2️⃣ 추천 피드백 전송 (YES/NO)
     # =========================================================================
     
     async def send_recommendation_feedback(
@@ -257,20 +241,14 @@ class AIServiceClient:
         accepted: bool
     ) -> Dict[str, Any]:
         """
-        사용자 피드백을 AI Server로 전송합니다.
-        
-        동작 흐름:
-        1. AI Server → Edge Module: 추천 제목 + 내용 수신 (POST /api/recommendations)
-        2. 사용자: YES/NO 선택 (프론트엔드)
-        3. Edge Module → AI Server: 피드백 전송 (이 메서드)
-        
+        추천 피드백 (YES/NO)을 AI Server로 전송합니다.
         Args:
             recommendation_id: 추천 ID
             user_id: 사용자 ID
             accepted: True(YES) 또는 False(NO)
         
         Returns:
-            AI 서버의 응답:
+            결과:
             {
                 "status": "success",
                 "message": "피드백이 저장되었습니다"
@@ -288,10 +266,9 @@ class AIServiceClient:
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 logger.info(
-                    f"📤 AI 서버 피드백 전송: POST {url}\n"
+                    f"📤 [2️⃣ 추천 피드백] AI Server로 전송: POST {url}\n"
                     f"   - recommendation_id: {recommendation_id}\n"
-                    f"   - user_id: {user_id}\n"
-                    f"   - accepted: {accepted}"
+                    f"   - accepted: {accepted} ({'YES' if accepted else 'NO'})"
                 )
                 
                 response = await client.post(
@@ -304,14 +281,14 @@ class AIServiceClient:
                 
                 result = response.json()
                 logger.info(
-                    f"✅ AI 서버 피드백 전송 성공\n"
-                    f"   - accepted: {accepted}"
+                    f"✅ [피드백 저장 완료]\n"
+                    f"   - accepted: {accepted} ({'YES' if accepted else 'NO'})"
                 )
                 
                 return result
                 
         except Exception as e:
-            logger.error(f"❌ AI 서버 피드백 전송 실패: {e}")
+            logger.error(f"❌ 피드백 전송 실패: {e}")
             return {
                 "success": False,
                 "message": f"피드백 전송 실패: {str(e)}"

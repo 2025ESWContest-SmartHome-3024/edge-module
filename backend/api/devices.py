@@ -67,49 +67,34 @@ async def get_devices():
 @router.post("/{device_id}/click")
 async def handle_device_click(device_id: str, request: dict):
     """
-    기기 제어 (gaze click 감지).
+    기기 클릭 감지 (AI Server에서 추천 자동 생성).
     
     POST /api/devices/{device_id}/click
-    Body: {"command": "turn_on"}
+    Body: {"command": "toggle"}
     
     Returns:
         {
             "success": true,
-            "device_id": "b403...",
-            "recommendation": {
-                "recommendation_id": "rec_abc123",
-                "title": "에어컨 킬까요?",
-                "contents": "현재 온도가 25도이므로...",
-                "confidence": 0.95
-            }
+            "device_id": "ac_001",
+            "message": "클릭 이벤트 저장됨"
         }
     """
     try:
-        logger.info(f"🎯 기기 제어: {device_id}")
+        logger.info(f"📍 [기기 클릭 감지] device_id={device_id}")
         
         demo_user_id = db.get_demo_user_id()
         
-        # AI Server로 기기 클릭 이벤트 전송
-        gaze_click_request = {
-            "user_id": str(demo_user_id),
-            "device_id": device_id,
-            "device_name": device_id,
-            "device_type": "unknown",
-            "timestamp": datetime.now(KST).isoformat()
-        }
-        
-        result = await ai_client.send_device_click(gaze_click_request)
-        
-        logger.info(f"✅ 기기 제어 신호 전송 완료")
+        # 클릭 이벤트만 로깅 (기기 제어는 여기서 하지 않음)
+        logger.info(f"✅ [클릭 저장 완료] device_id={device_id}, user_id={demo_user_id}")
         
         return {
             "success": True,
             "device_id": device_id,
-            "recommendation": result.get("recommendation")
+            "message": "클릭 이벤트 저장됨"
         }
     
     except Exception as e:
-        logger.error(f"❌ 기기 제어 실패: {e}")
+        logger.error(f"❌ 클릭 이벤트 처리 실패: {e}")
         return {
             "success": False,
             "error": str(e)
