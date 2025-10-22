@@ -1,8 +1,6 @@
 """스마트 홈 디바이스 제어를 위한 REST API 엔드포인트."""
 import logging
-from datetime import datetime
-from typing import Dict, Any, Optional
-import pytz
+from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
@@ -11,14 +9,11 @@ from backend.core.database import db
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
-KST = pytz.timezone('Asia/Seoul')
 
 
 class DeviceClickRequest(BaseModel):
-    """기기 클릭 요청."""
+    """기기 클릭 요청 (시선 추적 기반)."""
     user_id: str
-    action: str
-    params: Optional[Dict[str, Any]] = None
 
 
 @router.get("/")
@@ -38,7 +33,7 @@ async def get_devices():
         
         if devices:
             db.sync_devices(devices)
-            logger.info(f"Fetched {len(devices)} devices")
+            logger.info(f"Fetched {len(devices)} devices from AI Server")
             
             return {
                 "success": True,
@@ -58,7 +53,7 @@ async def get_devices():
             }
     
     except Exception as e:
-        logger.error(f"Failed to get devices: {e}")
+        logger.error(f"Failed to get devices: {e}", exc_info=True)
         return {
             "success": False,
             "devices": [],
@@ -69,45 +64,71 @@ async def get_devices():
 
 @router.post("/{device_id}/click")
 async def handle_device_click(device_id: str, request: DeviceClickRequest):
-    """기능: 기기 클릭 감지 및 액션 정보 저장.
+    """기능: 기기 클릭 이벤트 기록 및 AI Server로 전송.
     
-    args: device_id (path), user_id, action, params (body)
-    return: 성공 여부, device_id, action, 메시지
+    args: device_id (path), user_id (body)
+    return: 성공 여부, device_id, 메시지
     """
     try:
         user_id = request.user_id
-        action = request.action
-        params = request.params or {}
         
         if not user_id:
             logger.warning("Missing user_id in click event")
             raise HTTPException(status_code=400, detail="user_id is required")
         
-        if not action:
-            logger.warning("Missing action in click event")
-            raise HTTPException(status_code=400, detail="action is required")
-        
         logger.info(
-            f"Device click detected: device_id={device_id}, "
-            f"user_id={user_id}, action={action}, params={params}"
+            f"Device click detected: device_id={device_id}, user_id={user_id}"
         )
         
-        # DB에 기기 클릭 이벤트 기록 (향후 analytics 용도)
-        # db.record_device_click(user_id, device_id, action)
+        # 1단계: 로컬 DB에 클릭 이벤트 기록
+        logger.info(f"Recording device click event in local database")
+        # db.record_device_click(user_id, device_id)  # 향후 구현
+        
+        # 2단계: AI Server로 클릭 정보 전송
+        try:
+            # 기기 정보 조회
+            devices = db.get_devices()
+            device_info = next(
+                (d for d in devices if d["device_id"] == device_id),
+                None
+            )
+            
+            if not device_info:
+                logger.warning(f"Device not found: {device_id}")
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Device not found: {device_id}"
+                )
+            
+            logger.info(f"Sending device click to AI Server...")
+            click_result = await ai_client.send_device_click(
+                user_id=user_id,
+                device_id=device_id,
+                device_name=device_info.get("device_name", device_id),
+                device_type=device_info.get("device_type", "unknown")
+            )
+            
+            logger.info(f"AI Server processed device click: {click_result.get('message')}")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to send device click to AI Server: {e}", exc_info=True)
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to process device click: {str(e)}"
+            )
         
         return {
             "success": True,
             "device_id": device_id,
-            "action": action,
-            "params": params,
             "message": "Device click event saved"
         }
     
-    except HTTPException as e:
-        logger.error(f"Validation error: {e.detail}")
+    except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to process click event: {e}")
+        logger.error(f"Unexpected error in handle_device_click: {e}", exc_info=True)
         return {
             "success": False,
             "device_id": device_id,

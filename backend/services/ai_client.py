@@ -169,6 +169,58 @@ class AIServiceClient:
             }
     
     # =========================================================================
+    # Device Click Event
+    # =========================================================================
+    
+    async def send_device_click(
+        self,
+        user_id: str,
+        device_id: str,
+        device_name: str,
+        device_type: str
+    ) -> Dict[str, Any]:
+        """기능: 기기 클릭 이벤트를 AI Server로 전송.
+        
+        args: user_id, device_id, device_name, device_type
+        return: 결과 (success, message, recommendation)
+        """
+        url = f"{self.base_url}/api/gaze/click"
+        
+        payload = {
+            "user_id": user_id,
+            "device_id": device_id,
+            "device_name": device_name,
+            "device_type": device_type,
+            "timestamp": datetime.now(KST).isoformat()
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                logger.info(
+                    f"Send device click: user_id={user_id}, device_id={device_id}"
+                )
+                
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                response.raise_for_status()
+                
+                result = response.json()
+                logger.info(f"Device click processed: {device_id}")
+                
+                return result
+                
+        except Exception as e:
+            logger.warning(f"Failed to send device click: {e}")
+            return {
+                "success": False,
+                "message": f"Failed to send device click: {str(e)}"
+            }
+    
+    # =========================================================================
     # Recommendation Feedback
     # =========================================================================
     
