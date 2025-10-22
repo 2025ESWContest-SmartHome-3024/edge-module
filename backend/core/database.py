@@ -16,10 +16,10 @@ class Database:
     DEFAULT_USERNAME = "demo_user"
     
     def __init__(self, db_path: Optional[Path] = None):
-        """데이터베이스 초기화.
+        """기능: 데이터베이스 초기화.
         
-        Args:
-            db_path: 데이터베이스 파일 경로 (기본값: ~/.gazehome/calibrations/gazehome.db)
+        args: db_path (선택사항, 기본값: ~/.gazehome/calibrations/gazehome.db)
+        return: 없음
         """
         if db_path is None:
             db_path = settings.calibration_dir / "gazehome.db"
@@ -31,7 +31,11 @@ class Database:
         self._init_db()
     
     def _init_db(self):
-        """테이블 생성 (데모용 간소화)."""
+        """기능: 테이블 생성.
+        
+        args: 없음
+        return: 없음
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
@@ -76,7 +80,11 @@ class Database:
             self._init_demo_user()
     
     def _init_demo_user(self):
-        """데모용 기본 사용자 생성."""
+        """기능: 데모 사용자 생성.
+        
+        args: 없음
+        return: 없음
+        """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
@@ -93,10 +101,10 @@ class Database:
                 print(f"[Database] 데모 사용자 생성: {self.DEFAULT_USERNAME}")
     
     def get_demo_user_id(self) -> int:
-        """데모 사용자 ID를 가져옵니다.
+        """기능: 데모 사용자 ID 조회.
         
-        Returns:
-            데모 사용자 ID
+        args: 없음
+        return: 데모 사용자 ID
         """
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -120,11 +128,10 @@ class Database:
         calibration_file: str,
         method: str = "nine_point"
     ):
-        """새로운 캘리브레이션을 기록합니다 (데모는 항상 1명 사용자).
+        """기능: 캘리브레이션 저장.
         
-        Args:
-            calibration_file: 캘리브레이션 파일 경로
-            method: 캘리브레이션 방식 (기본값: nine_point)
+        args: calibration_file, method
+        return: 없음
         """
         user_id = self.get_demo_user_id()
         
@@ -141,10 +148,10 @@ class Database:
             print(f"[Database] 캘리브레이션 저장됨: {calibration_file}")
     
     def get_calibrations(self) -> List[Dict]:
-        """모든 캘리브레이션을 가져옵니다 (데모는 1명).
+        """기능: 캘리브레이션 목록 조회.
         
-        Returns:
-            캘리브레이션 정보 딕셔너리 목록
+        args: 없음
+        return: 캘리브레이션 정보 딕셔너리 목록
         """
         user_id = self.get_demo_user_id()
         
@@ -164,19 +171,19 @@ class Database:
             return [dict(row) for row in cursor.fetchall()]
     
     def has_calibration(self) -> bool:
-        """캘리브레이션이 있는지 확인합니다.
+        """기능: 캘리브레이션 존재 확인.
         
-        Returns:
-            캘리브레이션 유무
+        args: 없음
+        return: 캘리브레이션 유무
         """
         calibrations = self.get_calibrations()
         return len(calibrations) > 0
     
     def get_latest_calibration(self) -> Optional[str]:
-        """최신 캘리브레이션 파일을 가져옵니다.
+        """기능: 최신 캘리브레이션 파일 조회.
         
-        Returns:
-            최신 캘리브레이션 파일 경로 또는 None
+        args: 없음
+        return: 최신 캘리브레이션 파일 경로 또는 None
         """
         calibrations = self.get_calibrations()
         if calibrations:
@@ -188,16 +195,10 @@ class Database:
     # =========================================================================
     
     def sync_devices(self, devices: List[Dict]):
-        """AI Server에서 가져온 기기 목록을 로컬 DB에 동기화합니다 (데모는 1명).
+        """기능: 기기 목록 동기화.
         
-        Args:
-            devices: AI Server에서 가져온 기기 목록
-                [{
-                    "device_id": "ac_001",
-                    "device_name": "에어컨",
-                    "device_type": "airconditioner",
-                    "capabilities": ["turn_on", "turn_off", ...]
-                }, ...]
+        args: devices (AI Server에서 가져온 기기 목록)
+        return: 없음
         """
         user_id = self.get_demo_user_id()
         
@@ -226,10 +227,10 @@ class Database:
             print(f"[Database] {len(devices)}개 기기 동기화됨")
     
     def get_devices(self) -> List[Dict]:
-        """기기 목록을 로컬 DB에서 가져옵니다 (데모는 1명).
+        """기능: 기기 목록 조회.
         
-        Returns:
-            기기 목록
+        args: 없음
+        return: 기기 목록
         """
         user_id = self.get_demo_user_id()
         

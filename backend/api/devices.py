@@ -16,8 +16,8 @@ KST = pytz.timezone('Asia/Seoul')
 async def get_devices():
     """기능: 기기 목록 조회.
     
-    input: 없음
-    output: 기기 목록, 개수, 소스 (ai_server 또는 local_cache)
+    args: 없음
+    return: 기기 목록, 개수, 소스 (ai_server 또는 local_cache)
     """
     try:
         logger.info("Get device list")
@@ -62,8 +62,8 @@ async def get_devices():
 async def handle_device_click(device_id: str, request: dict):
     """기능: 기기 클릭 감지.
     
-    input: device_id
-    output: 성공 여부, device_id, 메시지
+    args: device_id
+    return: 성공 여부, device_id, 메시지
     """
     try:
         logger.info(f"Device click detected: device_id={device_id}")

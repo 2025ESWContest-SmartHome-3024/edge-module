@@ -22,15 +22,10 @@ class FilterStatusResponse(BaseModel):
 
 @router.get("/filter", response_model=FilterStatusResponse)
 async def get_filter_status():
-    """현재 필터 설정 및 상태를 가져옵니다.
+    """기능: 현재 필터 설정 및 상태 조회.
     
-    ⭐ 간소화된 설정:
-    - 필터: NoOp (필터링 비활성화)
-    - 모델: Ridge 회귀
-    - 화면: 1024x600
-    
-    Returns:
-        필터 상태 정보
+    args: 없음
+    return: 필터 상태 정보 (filter_method, active, message)
     """
     try:
         from backend.api.main import gaze_tracker
@@ -52,10 +47,10 @@ async def get_filter_status():
 
 @router.get("/tracker-info")
 async def get_tracker_info():
-    """포괄적인 추적기 정보를 가져옵니다.
+    """기능: 추적기 정보 조회.
     
-    Returns:
-        추적기 정보
+    args: 없음
+    return: 추적기 정보 (camera_index, model_name, filter_method, screen_size, calibrated, is_running, current_gaze, raw_gaze, blink, timestamp)
     """
     try:
         from backend.api.main import gaze_tracker

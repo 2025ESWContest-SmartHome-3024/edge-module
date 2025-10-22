@@ -38,8 +38,8 @@ class AIServiceClient:
     ) -> Dict[str, Any]:
         """기능: 기기 제어 명령을 AI Server로 전송.
         
-        input: user_id, device_id, action, params
-        output: 제어 결과 (success, message, device_id, action)
+        args: user_id, device_id, action, params
+        return: 제어 결과 (success, message, device_id, action)
         """
         url = f"{self.base_url}/api/lg/control"
         
@@ -84,8 +84,8 @@ class AIServiceClient:
     async def get_user_devices(self, user_id: str) -> list[Dict[str, Any]]:
         """기능: 사용자의 기기 목록을 AI Server에서 조회.
         
-        input: user_id
-        output: 기기 목록 (LG Gateway 형식)
+        args: user_id
+        return: 기기 목록 (LG Gateway 형식)
         """
         url = f"{self.base_url}/api/gaze/devices"
         
@@ -132,8 +132,8 @@ class AIServiceClient:
     ) -> Dict[str, Any]:
         """기능: 사용자를 AI Server에 등록 (비동기 백그라운드).
         
-        input: user_id, username, has_calibration
-        output: AI Server 응답 (success, message)
+        args: user_id, username, has_calibration
+        return: AI Server 응답 (success, message)
         """
         url = f"{self.base_url}/api/users/register"
         
@@ -180,8 +180,8 @@ class AIServiceClient:
     ) -> Dict[str, Any]:
         """기능: 추천 피드백 (YES/NO)을 AI Server로 전송.
         
-        input: recommendation_id, user_id, accepted
-        output: 결과 (status, message)
+        args: recommendation_id, user_id, accepted
+        return: 결과 (status, message)
         """
         url = f"{self.base_url}/api/gaze/feedback"
         
@@ -224,8 +224,8 @@ class AIServiceClient:
     def _get_fallback_response(request: Dict[str, Any]) -> Dict[str, Any]:
         """기능: AI Server 오류 시 기본 응답 반환.
         
-        input: request (원본 요청)
-        output: 기본 응답
+        args: request (원본 요청)
+        return: 기본 응답
         """
         device_info = request.get("clicked_device", {})
         

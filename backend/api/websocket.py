@@ -19,29 +19,29 @@ class ConnectionManager:
         self.active_connections: list[WebSocket] = []
     
     async def connect(self, websocket: WebSocket):
-        """새로운 연결을 수락하고 등록합니다.
+        """기능: WebSocket 연결 수락.
         
-        Args:
-            websocket: WebSocket 연결
+        args: websocket
+        return: 없음
         """
         await websocket.accept()
         self.active_connections.append(websocket)
         print(f"[WebSocket] 클라이언트 연결됨. 총 연결 수: {len(self.active_connections)}")
     
     def disconnect(self, websocket: WebSocket):
-        """연결을 제거합니다.
+        """기능: WebSocket 연결 해제.
         
-        Args:
-            websocket: 제거할 WebSocket 연결
+        args: websocket
+        return: 없음
         """
         self.active_connections.remove(websocket)
         print(f"[WebSocket] 클라이언트 연결 해제됨. 총 연결 수: {len(self.active_connections)}")
     
     async def broadcast(self, message: dict):
-        """모든 연결된 클라이언트에 메시지를 전송합니다.
+        """기능: 모든 클라이언트에 메시지 전송.
         
-        Args:
-            message: 전송할 메시지 딕셔너리
+        args: message
+        return: 없음
         """
         disconnected = []
         for connection in self.active_connections:
@@ -63,9 +63,10 @@ manager = ConnectionManager()
 
 @router.websocket("/gaze")
 async def websocket_gaze(websocket: WebSocket):
-    """실시간 시선 스트리밍용 WebSocket 엔드포인트.
+    """기능: 실시간 시선 스트리밍.
     
-    약 30-60 FPS로 시선 좌표를 연결된 클라이언트에 전송합니다.
+    args: websocket
+    return: 없음 (연속 스트림)
     """
     await manager.connect(websocket)
     
@@ -129,9 +130,10 @@ async def websocket_gaze(websocket: WebSocket):
 
 @router.websocket("/control")
 async def websocket_control(websocket: WebSocket):
-    """제어 명령을 수신하기 위한 WebSocket 엔드포인트.
+    """기능: 제어 명령 수신.
     
-    캘리브레이션 트리거, 설정 변경 등의 명령을 수락합니다.
+    args: websocket
+    return: 없음 (연속 수신)
     """
     await websocket.accept()
     
@@ -215,9 +217,10 @@ async def websocket_control(websocket: WebSocket):
 
 @router.websocket("/features")
 async def websocket_features(websocket: WebSocket):
-    """캘리브레이션 중 실시간 특징 추출용 WebSocket 엔드포인트.
+    """기능: 캘리브레이션 중 실시간 특징 추출.
     
-    캘리브레이션 목적으로 원본 특징 및 얼굴 감지 상태를 스트리밍합니다.
+    args: websocket
+    return: 없음 (연속 스트림)
     """
     await websocket.accept()
     

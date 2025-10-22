@@ -44,12 +44,10 @@ class WebGazeTracker:
         self.PROLONGED_BLINK_DURATION = 1.0  # 👁️ 1초 이상 눈깜빡임 = 클릭
         
     async def initialize(self):
-        """Initialize camera and smoother.
+        """기능: 카메라 및 필터 초기화.
         
-        ⭐ 간소화된 설정:
-        - 모델: Ridge 회귀 (가볍고 빠름)
-        - 필터: NoOp (필터링 비활성화)
-        - 화면: 1024x600 (라즈베리파이 최적화)
+        args: 없음
+        return: 없음
         """
         self.cap = cv2.VideoCapture(self.camera_index)
         if not self.cap.isOpened():
@@ -61,12 +59,20 @@ class WebGazeTracker:
 
             
     def load_calibration(self, model_path: str):
-        """Load pre-trained calibration model."""
+        """기능: 캘리브레이션 모델 로드.
+        
+        args: model_path
+        return: 없음
+        """
         self.gaze_estimator.load_model(model_path)
         self.calibrated = True
         
     def save_calibration(self, model_path: str):
-        """Save current calibration model."""
+        """기능: 캘리브레이션 모델 저장.
+        
+        args: model_path
+        return: 없음
+        """
         self.gaze_estimator.save_model(model_path)
     
     # ⭐ Kalman 필터 튜닝 제거됨 (NoOp 필터 사용)
@@ -74,14 +80,22 @@ class WebGazeTracker:
     # 메서드들은 필터링이 비활성화되어 있으므로 필요 없음
     
     async def start_tracking(self):
-        """Start continuous gaze tracking."""
+        """기능: 시선 추적 시작.
+        
+        args: 없음
+        return: 없음 (연속 프레임 처리)
+        """
         self.is_running = True
         while self.is_running:
             await self._process_frame()
             await asyncio.sleep(0.016)  # ~60 FPS
             
     async def _process_frame(self):
-        """Process single frame for gaze estimation."""
+        """기능: 단일 프레임 처리 및 시선 추정.
+        
+        args: 없음
+        return: 없음
+        """
         if self.cap is None:
             return
             
@@ -134,18 +148,10 @@ class WebGazeTracker:
                 self.raw_gaze = self.current_gaze
                 
     def get_current_state(self) -> dict:
-        """Get current gaze state (thread-safe, non-blocking).
+        """기능: 현재 시선 상태 조회.
         
-        Returns:
-            dict: {
-                gaze: (x, y),
-                raw_gaze: (x, y),
-                blink: bool,
-                blink_duration: float (초),
-                prolonged_blink: bool (0.5초 이상),
-                calibrated: bool,
-                timestamp: float
-            }
+        args: 없음
+        return: 현재 상태 (gaze, raw_gaze, blink, blink_duration, prolonged_blink, calibrated, timestamp)
         """
         return {
             "gaze": self.current_gaze,
@@ -158,7 +164,11 @@ class WebGazeTracker:
         }
             
     async def stop_tracking(self):
-        """Stop gaze tracking and release resources."""
+        """기능: 시선 추적 중지.
+        
+        args: 없음
+        return: 없음
+        """
         self.is_running = False
         if self.cap is not None:
             self.cap.release()

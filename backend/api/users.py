@@ -24,8 +24,8 @@ class LoginResponse(BaseModel):
 async def login_user():
     """기능: 데모 사용자 로그인.
     
-    input: 없음
-    output: success, username, has_calibration, calibration_file, message
+    args: 없음
+    return: success, username, has_calibration, calibration_file, message
     """
     try:
         username = db.DEFAULT_USERNAME

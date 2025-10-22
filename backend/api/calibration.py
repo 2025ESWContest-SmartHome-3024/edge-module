@@ -112,14 +112,10 @@ class CalibrationSession:
         screen_height: int,
         margin_ratio: float = 0.10
     ):
-        """캘리브레이션 세션 초기화.
+        """기능: 캘리브레이션 세션 초기화.
         
-        Args:
-            session_id: 세션 ID
-            method: 캘리브레이션 방식
-            screen_width: 화면 너비
-            screen_height: 화면 높이
-            margin_ratio: 여백 비율 (기본값: 0.10)
+        args: session_id, method, screen_width, screen_height, margin_ratio
+        return: 없음
         """
         self.session_id = session_id
         self.method = method
@@ -139,10 +135,10 @@ class CalibrationSession:
         self.collected_targets: List[List[int]] = []
         
     def _generate_points(self) -> List[CalibrationPoint]:
-        """9점 캘리브레이션 포인트를 생성합니다.
+        """기능: 9점 캘리브레이션 포인트 생성.
         
-        Returns:
-            캘리브레이션 포인트 목록
+        args: 없음
+        return: 캘리브레이션 포인트 목록
         """
         # 3x3 그리드 (중심 먼저, 그 다음 주변)
         order = [

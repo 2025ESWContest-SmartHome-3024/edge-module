@@ -38,8 +38,8 @@ class RecommendationResponse(BaseModel):
 async def receive_recommendation(request: RecommendationRequest):
     """기능: AI Server로부터 추천을 수신 (자동 호출).
     
-    input: recommendation_id, title, contents, user_id
-    output: message, confirm
+    args: recommendation_id, title, contents, user_id
+    return: message, confirm
     """
     try:
         logger.info(f"Receive recommendation: {request.recommendation_id}")
@@ -76,8 +76,8 @@ class UserFeedbackRequest(BaseModel):
 async def submit_user_feedback(feedback: UserFeedbackRequest):
     """기능: 프론트엔드에서 사용자 피드백(YES/NO) 제출.
     
-    input: recommendation_id, user_id, accepted, device_id, action
-    output: success, message
+    args: recommendation_id, user_id, accepted, device_id, action
+    return: success, message
     """
     try:
         logger.info(f"User feedback received: accepted={feedback.accepted}")
