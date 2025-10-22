@@ -70,14 +70,13 @@ function App() {
     }
 
     /**
-     * 사용자 로그인 처리
-     * @param {string} username - 사용자명
+     * 사용자 로그인 처리 (데모 모드: 고정된 demo_user 사용)
      */
-    const handleLogin = async (username) => {
+    const handleLogin = async () => {
         try {
-            console.log(`[App] 사용자 로그인: "${username}"`)
+            console.log('[App] 로그인 시작...')
 
-            // 백엔드 로그인 API 호출 (데모: username 무시, 기본 사용자 사용)
+            // 백엔드 로그인 API 호출
             const response = await fetch('/api/users/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' }
@@ -90,7 +89,8 @@ function App() {
             const data = await response.json()
             console.log('[App] 로그인 응답:', data)
 
-            // localStorage에 저장 (UI 표시용 username)
+            // localStorage에 저장 (백엔드에서 반환된 username 사용)
+            const username = data.username
             localStorage.setItem('gazehome_logged_in', 'true')
             localStorage.setItem('gazehome_username', username)
             setIsLoggedIn(true)

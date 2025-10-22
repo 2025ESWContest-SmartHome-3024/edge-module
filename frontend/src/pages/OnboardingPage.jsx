@@ -6,27 +6,22 @@ import './OnboardingPage.css'
 /**
  * 온보딩/로그인 페이지
  * - 초기 사용자 입장점
- * - 사용자명 입력 및 로그인
+ * - 데모 모드: 로그인 버튼 클릭으로 시작 (사용자명 입력 없음)
  */
 function OnboardingPage({ onLogin }) {
-    // 사용자가 입력한 사용자명 (기본값: 'kitty')
-    const [username, setUsername] = useState('kitty')
     // 로그인 진행 중 여부
     const [isLoading, setIsLoading] = useState(false)
 
     /**
-     * 폼 제출 핸들러
+     * 로그인 버튼 클릭 핸들러
      */
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        if (!username.trim()) return
-
+    const handleLogin = async () => {
         setIsLoading(true)
 
         try {
             // 부모 로그인 핸들러 호출 (백엔드 API 호출)
-            // 데모 모드: 입력한 username은 localStorage에만 저장, 백엔드는 기본 사용자 사용
-            await onLogin(username)
+            // 데모 모드: 백엔드에서 고정된 demo_user 사용
+            await onLogin()
         } catch (error) {
             console.error('로그인 오류:', error)
         } finally {
@@ -84,29 +79,17 @@ function OnboardingPage({ onLogin }) {
                     </motion.p>
 
                     {/* 로그인 폼 */}
-                    <motion.form
+                    <motion.div
                         className="login-form"
-                        onSubmit={handleSubmit}
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         transition={{ delay: 0.6 }}
                     >
-                        <div className="input-group">
-                            <input
-                                type="text"
-                                placeholder="사용자 이름을 입력하세요"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                className="login-input"
-                                disabled={isLoading}
-                                autoFocus
-                            />
-                        </div>
-
                         <button
-                            type="submit"
+                            type="button"
                             className="login-button"
-                            disabled={!username.trim() || isLoading}
+                            onClick={handleLogin}
+                            disabled={isLoading}
                         >
                             {isLoading ? (
                                 <>
@@ -120,7 +103,7 @@ function OnboardingPage({ onLogin }) {
                                 </>
                             )}
                         </button>
-                    </motion.form>
+                    </motion.div>
 
                     {/* 기능 목록 */}
                     <motion.div
