@@ -181,11 +181,12 @@ function HomePage({ onLogout }) {
                 }
 
                 // � 시선 인식 가능 여부 (false = 시선 불인식, 포인터 마지막 위치 고정)
+                // 시선 인식 가능 여부 (false = 시선 불인식, 포인터 마지막 위치 고정)
                 if (data.calibrated !== undefined) {
                     setCalibrated(data.calibrated)
                 }
 
-                // �👁️ 1초 이상 눈깜빡임 감지
+                // 1초 이상 눈깜빡임 감지
                 if (data.prolonged_blink !== undefined) {
                     setProlongedBlink(data.prolonged_blink)
 
@@ -193,6 +194,24 @@ function HomePage({ onLogout }) {
                         console.log('[HomePage] 눈깜빡임 1초+ 감지 - 클릭으로 인식!')
                     }
                 }
+            }
+
+            // MQTT로부터 받은 추천 메시지 처리
+            if (data.type === 'recommendation') {
+                console.log('[HomePage] MQTT 추천 수신:', data.title)
+                setRecommendations([{
+                    id: `rec_mqtt_${Date.now()}`,
+                    title: data.title,
+                    description: data.content,
+                    device_id: null,
+                    device_name: 'AI 추천',
+                    action: null,
+                    params: {},
+                    reason: data.content,
+                    priority: 3,
+                    timestamp: new Date().toISOString()
+                }])
+                setShowRecommendations(true)
             }
         }
 

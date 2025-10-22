@@ -60,8 +60,8 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
      * - 피드백 전송
      * - 콜백 실행
      */
-    const handleButtonClick = async (callback, accepted = true) => {
-        // 🔒 1.5초 포인터 고정 시작
+    const handleButtonClick = async (callback, confirm = true) => {
+        // 포인터 고정 시작
         console.log(`[RecommendationModal] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
         setIsLocked(true)
 
@@ -76,20 +76,24 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             setIsLocked(false)
         }, LOCK_DURATION)
 
-        // 피드백 전송
-        try {
-            await fetch('/api/recommendations/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    recommendation_id: topRecommendation.id || topRecommendation.recommendation_id,
-                    user_id: localStorage.getItem('gazehome_user_id') || '1',
-                    accepted: accepted
-                }),
-            })
-            console.log(`[RecommendationModal] 피드백 전송: ${accepted ? '수락' : '거절'}`)
-        } catch (error) {
-            console.error('[RecommendationModal] 피드백 전송 실패:', error)
+        // MQTT 추천인 경우만 피드백 전송 (device_id가 없음)
+        if (topRecommendation.id.startsWith('rec_mqtt')) {
+            try {
+                await fetch('/api/recommendations/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: topRecommendation.title,
+                        confirm: confirm
+                    }),
+                })
+                console.log(`[RecommendationModal] MQTT 피드백 전송: ${confirm ? 'YES' : 'NO'}`)
+            } catch (error) {
+                console.error('[RecommendationModal] 피드백 전송 실패:', error)
+            }
+        } else {
+            // 일반 추천 (device click)은 피드백 없음
+            console.log(`[RecommendationModal] 일반 추천 (device click) - 피드백 생략`)
         }
 
         // 콜백 실행

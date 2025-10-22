@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -10,10 +11,35 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.core.config import settings
 from backend.core.gaze_tracker import WebGazeTracker
 from backend.api import websocket, devices, recommendations, calibration, settings as settings_api, users
+from backend.services.mqtt_client import mqtt_client
 
+logger = logging.getLogger(__name__)
 
 # 전역 시선 추적기 인스턴스
 gaze_tracker: WebGazeTracker | None = None
+
+
+def _on_recommendation_received(recommendation: dict):
+    """MQTT에서 추천을 수신했을 때 호출되는 콜백."""
+    logger.info(f"Recommendation received via MQTT: {recommendation}")
+    
+    # 현재 추천 저장
+    recommendations.set_current_recommendation(recommendation)
+    
+    # Frontend에 WebSocket으로 푸시
+    asyncio.create_task(_broadcast_recommendation_to_clients(recommendation))
+
+
+async def _broadcast_recommendation_to_clients(recommendation: dict):
+    """모든 WebSocket 클라이언트에 추천을 브로드캐스트."""
+    message = {
+        "type": "recommendation",
+        "title": recommendation.get("title"),
+        "content": recommendation.get("content")
+    }
+    
+    await websocket.manager.broadcast(message)
+    logger.info(f"Broadcasted recommendation to {len(websocket.manager.active_connections)} clients")
 
 
 @asynccontextmanager
@@ -22,7 +48,7 @@ async def lifespan(app: FastAPI):
     global gaze_tracker
     
     # 시작
-    print(f"[Backend] GazeHome 웹 서버 시작: {settings.host}:{settings.port}")
+    logger.info(f"[Backend] GazeHome 웹 서버 시작: {settings.host}:{settings.port}")
     gaze_tracker = WebGazeTracker(
         camera_index=settings.camera_index,
         model_name=settings.model_name,
@@ -32,31 +58,43 @@ async def lifespan(app: FastAPI):
     
     try:
         await gaze_tracker.initialize()
-        print("[Backend] 시선 추적기 초기화됨")
+        logger.info("[Backend] 시선 추적기 초기화됨")
         
         # 기본 캘리브레이션이 존재하면 로드
         default_calibration = settings.calibration_dir / "default.pkl"
         if default_calibration.exists():
             gaze_tracker.load_calibration(str(default_calibration))
-            print(f"[Backend] 캘리브레이션 로드됨: {default_calibration}")
+            logger.info(f"[Backend] 캘리브레이션 로드됨: {default_calibration}")
         else:
-            print("[Backend] 캘리브레이션을 찾을 수 없습니다. 캘리브레이션이 필요합니다.")
+            logger.info("[Backend] 캘리브레이션을 찾을 수 없습니다. 캘리브레이션이 필요합니다.")
+            
+        # MQTT 클라이언트 연결 및 콜백 등록
+        logger.info("[Backend] MQTT 클라이언트 연결 중...")
+        if mqtt_client.connect():
+            mqtt_client.on_recommendations_receive(_on_recommendation_received)
+            logger.info("[Backend] MQTT 클라이언트 연결됨 및 콜백 등록됨")
+        else:
+            logger.warning("[Backend] MQTT 브로커 연결 실패")
             
         # 백그라운드에서 추적 시작
         asyncio.create_task(gaze_tracker.start_tracking())
-        print("[Backend] 시선 추적 시작됨")
+        logger.info("[Backend] 시선 추적 시작됨")
         
     except Exception as e:
-        print(f"[Backend] 초기화 실패: {e}")
+        logger.error(f"[Backend] 초기화 실패: {e}", exc_info=True)
         raise
     
     yield
     
     # 종료
-    print("[Backend] 종료 중...")
+    logger.info("[Backend] 종료 중...")
     if gaze_tracker:
         await gaze_tracker.stop_tracking()
-    print("[Backend] 시선 추적기 중지됨")
+    logger.info("[Backend] 시선 추적기 중지됨")
+    
+    # MQTT 클라이언트 연결 해제
+    mqtt_client.disconnect()
+    logger.info("[Backend] MQTT 클라이언트 연결 해제됨")
 
 
 # FastAPI 앱 생성
@@ -101,7 +139,8 @@ async def health():
     """헬스 체크 엔드포인트."""
     return {
         "status": "건강함",
-        "tracker_active": gaze_tracker is not None and gaze_tracker.is_running
+        "tracker_active": gaze_tracker is not None and gaze_tracker.is_running,
+        "mqtt_connected": mqtt_client.is_connected
     }
 
 

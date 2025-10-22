@@ -177,11 +177,12 @@ class AIServiceClient:
         user_id: str,
         device_id: str,
         device_name: str,
-        device_type: str
+        device_type: str,
+        action: str
     ) -> Dict[str, Any]:
         """기능: 기기 클릭 이벤트를 AI Server로 전송.
         
-        args: user_id, device_id, device_name, device_type
+        args: user_id, device_id, device_name, device_type, action
         return: 결과 (success, message, recommendation)
         """
         url = f"{self.base_url}/api/gaze/click"
@@ -191,13 +192,15 @@ class AIServiceClient:
             "device_id": device_id,
             "device_name": device_name,
             "device_type": device_type,
+            "action": action,
             "timestamp": datetime.now(KST).isoformat()
         }
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 logger.info(
-                    f"Send device click: user_id={user_id}, device_id={device_id}"
+                    f"Send device click: user_id={user_id}, device_id={device_id}, "
+                    f"action={action}"
                 )
                 
                 response = await client.post(
@@ -209,7 +212,7 @@ class AIServiceClient:
                 response.raise_for_status()
                 
                 result = response.json()
-                logger.info(f"Device click processed: {device_id}")
+                logger.info(f"Device click processed: {device_id}, action: {action}")
                 
                 return result
                 
@@ -218,54 +221,6 @@ class AIServiceClient:
             return {
                 "success": False,
                 "message": f"Failed to send device click: {str(e)}"
-            }
-    
-    # =========================================================================
-    # Recommendation Feedback
-    # =========================================================================
-    
-    async def send_recommendation_feedback(
-        self,
-        recommendation_id: str,
-        user_id: str,
-        accepted: bool
-    ) -> Dict[str, Any]:
-        """기능: 추천 피드백 (YES/NO)을 AI Server로 전송.
-        
-        args: recommendation_id, user_id, accepted
-        return: 결과 (status, message)
-        """
-        url = f"{self.base_url}/api/gaze/feedback"
-        
-        payload = {
-            "recommendation_id": recommendation_id,
-            "user_id": user_id,
-            "accepted": accepted,
-            "timestamp": datetime.now(KST).isoformat()
-        }
-        
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"Send recommendation feedback: {recommendation_id}, accepted={accepted}")
-                
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"}
-                )
-                
-                response.raise_for_status()
-                
-                result = response.json()
-                logger.info(f"Recommendation feedback sent: accepted={accepted}")
-                
-                return result
-                
-        except Exception as e:
-            logger.error(f"Failed to send recommendation feedback: {e}")
-            return {
-                "success": False,
-                "message": f"Feedback failed: {str(e)}"
             }
     
     # =========================================================================

@@ -3,12 +3,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from backend.core.gaze_tracker import WebGazeTracker
+from backend.services.mqtt_client import mqtt_client
+from backend.api import recommendations
 
-
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
