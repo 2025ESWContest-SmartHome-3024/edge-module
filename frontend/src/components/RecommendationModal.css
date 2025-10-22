@@ -140,10 +140,10 @@
 
 .action-button {
     flex: 1;
-    padding: var(--spacing-md) var(--spacing-lg);
+    padding: var(--spacing-lg) var(--spacing-xl);
     border: none;
     border-radius: var(--radius-lg);
-    font-size: 1rem;
+    font-size: 1.125rem;
     font-weight: 600;
     cursor: pointer;
     transition: all var(--transition-base);
@@ -151,6 +151,7 @@
     align-items: center;
     justify-content: center;
     gap: var(--spacing-sm);
+    min-height: 56px;
 }
 
 .action-button.accept {
@@ -159,9 +160,14 @@
     box-shadow: var(--shadow-md);
 }
 
-.action-button.accept:hover {
+.action-button.accept:hover:not(:disabled) {
     transform: translateY(-2px);
     box-shadow: var(--shadow-lg);
+}
+
+.action-button.accept:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .action-button.dismiss {
@@ -169,8 +175,13 @@
     color: var(--gray-700);
 }
 
-.action-button.dismiss:hover {
+.action-button.dismiss:hover:not(:disabled) {
     background: var(--gray-200);
+}
+
+.action-button.dismiss:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
 }
 
 .other-recommendations {

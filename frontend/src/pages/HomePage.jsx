@@ -38,6 +38,8 @@ function HomePage({ onLogout }) {
     const [blink, setBlink] = useState(false)
     // 🔒 글로벌 포인터 고정 상태 (버튼 위 포인터 1.5초 고정)
     const [isPointerLocked, setIsPointerLocked] = useState(false)
+    // 🔒 현재 제어 중인 기기 (중복 클릭 방지)
+    const [controllingDevice, setControllingDevice] = useState(null)
 
     /**
      * 포인터 1.5초 고정 함수
@@ -214,7 +216,16 @@ function HomePage({ onLogout }) {
      * @param {Object} params - 추가 파라미터
      */
     const handleDeviceControl = async (deviceId, action, params = {}) => {
+        // 🔒 다른 기기 제어 중이면 return
+        if (controllingDevice) {
+            console.log('[HomePage] 기기 제어 중 - 건너뜀:', controllingDevice)
+            return
+        }
+
         try {
+            setControllingDevice(deviceId)
+            console.log('[HomePage] 기기 제어 시작:', deviceId)
+
             // Backend: POST /api/devices/{device_id}/click
             // 응답 형식: { "success": true, "device_id": "...", "result": {...} }
             const response = await fetch(`/api/devices/${deviceId}/click`, {
@@ -234,6 +245,12 @@ function HomePage({ onLogout }) {
             }
         } catch (error) {
             console.error('[HomePage] 기기 제어 오류:', error)
+        } finally {
+            // 500ms 후 제어 완료 (다음 기기 제어 가능)
+            setTimeout(() => {
+                setControllingDevice(null)
+                console.log('[HomePage] 기기 제어 완료')
+            }, 500)
         }
     }
 
@@ -362,6 +379,7 @@ function HomePage({ onLogout }) {
                                         prolongedBlink={prolongedBlink}
                                         isPointerLocked={isPointerLocked}
                                         onPointerEnter={lockPointer}
+                                        isControlling={controllingDevice === device.id}
                                     />
                                 </motion.div>
                             ))}

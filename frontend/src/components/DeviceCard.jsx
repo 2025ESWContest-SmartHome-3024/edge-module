@@ -26,14 +26,16 @@ const DWELL_TIME = 2000
  * - 2초 응시 후 자동 토글
  * - 👁️ 0.5초+ 눈깜빡임 감지 → 즉시 토글
  * - 메타데이터 표시 (온도, 습도, 밝기 등)
+ * - 🔒 제어 중이면 클릭 불가
  * 
  * @param {Object} device - 기기 정보
  * @param {Function} onControl - 기기 제어 콜백
  * @param {boolean} prolongedBlink - 0.5초 이상 눈깜빡임 감지
  * @param {boolean} isPointerLocked - 전역 포인터 고정 상태
  * @param {Function} onPointerEnter - 포인터 고정 콜백 (버튼 호버 시)
+ * @param {boolean} isControlling - 현재 제어 중인지 여부
  */
-function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPointerEnter }) {
+function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPointerEnter, isControlling = false }) {
     // 현재 시선이 카드 위에 있는지 여부
     const [isHovering, setIsHovering] = useState(false)
     // 시선 유지 진행률 (0-1)
@@ -211,6 +213,7 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
 
     /**
      * 기기 토글 핸들러 (시선 클릭 시 AI 서버로 요청)
+     * 🔒 제어 중이면 return
      * 
      * 1. POST /api/devices/{device_id}/click 호출 (Backend)
      * 2. Backend가 AI 서버에서 추천받기
@@ -218,6 +221,12 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
      * 4. RecommendationModal에서 사용자 선택 대기
      */
     const handleToggle = async () => {
+        // 🔒 다른 기기 제어 중이면 return
+        if (isControlling) {
+            console.log(`[DeviceCard] 제어 중 - 건너뜀: ${device.name}`)
+            return
+        }
+
         try {
             console.log(`[DeviceCard] 시선 클릭: ${device.name}`)
 
@@ -353,10 +362,15 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
                 <button
                     className={`control-button ${isOn ? 'on' : 'off'}`}
                     onClick={handleToggle}
+                    disabled={isControlling}
+                    style={{
+                        opacity: isControlling ? 0.5 : 1,
+                        cursor: isControlling ? 'not-allowed' : 'pointer',
+                        pointerEvents: isControlling ? 'none' : 'auto'
+                    }}
                     onMouseEnter={() => {
-                        // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
-                        console.log(`[DeviceCard Button] 포인터 버튼 진입 - 1.5초 고정`)
-                        if (onPointerEnter) {
+                        if (!isControlling && onPointerEnter) {
+                            console.log(`[DeviceCard Button] 포인터 버튼 진입 - 1.5초 고정`)
                             onPointerEnter(1500)
                         }
                     }}

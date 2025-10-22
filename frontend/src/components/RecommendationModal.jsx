@@ -57,9 +57,10 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     /**
      * 버튼 클릭 핸들러
      * - 포인터 고정 시작
+     * - 피드백 전송
      * - 콜백 실행
      */
-    const handleButtonClick = (callback) => {
+    const handleButtonClick = async (callback, accepted = true) => {
         // 🔒 1.5초 포인터 고정 시작
         console.log(`[RecommendationModal] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
         setIsLocked(true)
@@ -74,6 +75,22 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             console.log(`[RecommendationModal] 포인터 고정 해제`)
             setIsLocked(false)
         }, LOCK_DURATION)
+
+        // 피드백 전송
+        try {
+            await fetch('/api/recommendations/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    recommendation_id: topRecommendation.id || topRecommendation.recommendation_id,
+                    user_id: localStorage.getItem('gazehome_user_id') || '1',
+                    accepted: accepted
+                }),
+            })
+            console.log(`[RecommendationModal] 피드백 전송: ${accepted ? '수락' : '거절'}`)
+        } catch (error) {
+            console.error('[RecommendationModal] 피드백 전송 실패:', error)
+        }
 
         // 콜백 실행
         callback()
@@ -118,7 +135,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             if (isInside) {
                 // 👁️ 모달 위에서 깜빡임 감지 → "적용하기" 버튼 클릭
                 console.log(`[RecommendationModal] 👁️ 1초 깜빡임 클릭 감지 - "적용하기" 실행`)
-                handleButtonClick(() => onAccept(topRecommendation))
+                handleButtonClick(() => onAccept(topRecommendation), true)
             }
         } else {
             // 상태 업데이트
@@ -191,12 +208,11 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                     <div className="modal-actions">
                         <button
                             className="action-button accept"
-                            onClick={() => handleButtonClick(() => onAccept(topRecommendation))}
+                            onClick={() => handleButtonClick(() => onAccept(topRecommendation), true)}
                             disabled={isLocked}
                             onMouseEnter={() => {
-                                // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
-                                console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
-                                if (onPointerEnter) {
+                                if (!isLocked && onPointerEnter) {
+                                    console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
                                     onPointerEnter(1500)
                                 }
                             }}
@@ -206,12 +222,11 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                         </button>
                         <button
                             className="action-button dismiss"
-                            onClick={() => handleButtonClick(onClose)}
+                            onClick={() => handleButtonClick(onClose, false)}
                             disabled={isLocked}
                             onMouseEnter={() => {
-                                // 버튼 위에 포인터가 들어올 때 1.5초 포인터 고정
-                                console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
-                                if (onPointerEnter) {
+                                if (!isLocked && onPointerEnter) {
+                                    console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
                                     onPointerEnter(1500)
                                 }
                             }}
