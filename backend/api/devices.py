@@ -14,19 +14,13 @@ KST = pytz.timezone('Asia/Seoul')
 
 @router.get("/")
 async def get_devices():
-    """
-    기기 목록을 조회합니다 (데모는 1명 사용자).
+    """기능: 기기 목록 조회.
     
-    Returns:
-        {
-            "success": true,
-            "devices": [...],
-            "count": 3,
-            "source": "ai_server"
-        }
+    input: 없음
+    output: 기기 목록, 개수, 소스 (ai_server 또는 local_cache)
     """
     try:
-        logger.info("📋 기기 목록 조회")
+        logger.info("Get device list")
         
         demo_user_id = db.get_demo_user_id()
         demo_user_id_str = str(demo_user_id)
@@ -35,7 +29,7 @@ async def get_devices():
         
         if devices:
             db.sync_devices(devices)
-            logger.info(f"✅ {len(devices)}개 기기 조회")
+            logger.info(f"Fetched {len(devices)} devices")
             
             return {
                 "success": True,
@@ -44,7 +38,7 @@ async def get_devices():
                 "source": "ai_server"
             }
         else:
-            logger.warning("⚠️ AI Server 실패, 로컬 캐시 사용")
+            logger.warning("AI Server failed, using local cache")
             local_devices = db.get_devices()
             
             return {
@@ -55,7 +49,7 @@ async def get_devices():
             }
     
     except Exception as e:
-        logger.error(f"❌ 기기 목록 조회 실패: {e}")
+        logger.error(f"Failed to get devices: {e}")
         return {
             "success": False,
             "devices": [],
@@ -66,35 +60,26 @@ async def get_devices():
 
 @router.post("/{device_id}/click")
 async def handle_device_click(device_id: str, request: dict):
-    """
-    기기 클릭 감지 (AI Server에서 추천 자동 생성).
+    """기능: 기기 클릭 감지.
     
-    POST /api/devices/{device_id}/click
-    Body: {"command": "toggle"}
-    
-    Returns:
-        {
-            "success": true,
-            "device_id": "ac_001",
-            "message": "클릭 이벤트 저장됨"
-        }
+    input: device_id
+    output: 성공 여부, device_id, 메시지
     """
     try:
-        logger.info(f"📍 [기기 클릭 감지] device_id={device_id}")
+        logger.info(f"Device click detected: device_id={device_id}")
         
         demo_user_id = db.get_demo_user_id()
         
-        # 클릭 이벤트만 로깅 (기기 제어는 여기서 하지 않음)
-        logger.info(f"✅ [클릭 저장 완료] device_id={device_id}, user_id={demo_user_id}")
+        logger.info(f"Click event saved: device_id={device_id}, user_id={demo_user_id}")
         
         return {
             "success": True,
             "device_id": device_id,
-            "message": "클릭 이벤트 저장됨"
+            "message": "Click event saved"
         }
     
     except Exception as e:
-        logger.error(f"❌ 클릭 이벤트 처리 실패: {e}")
+        logger.error(f"Failed to process click event: {e}")
         return {
             "success": False,
             "error": str(e)

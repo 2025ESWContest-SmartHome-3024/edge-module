@@ -15,29 +15,18 @@ KST = pytz.timezone('Asia/Seoul')
 
 
 class AIServiceClient:
-    """AI 서버와의 HTTP 통신을 담당하는 클라이언트.
-    
-    역할:
-    1️⃣ 기기 제어 명령 전송 (send_device_control)
-    2️⃣ 추천 피드백 전송 (send_recommendation_feedback)
-    3️⃣ 기기 목록 조회 (get_user_devices)
-    4️⃣ 사용자 등록 (register_user_async)
-    
-    주의: 추천은 AI Server에서 자동으로 옴 (요청 불필요)
-    """
+    """AI Server HTTP 클라이언트."""
     
     def __init__(self):
-        """AI 서버 클라이언트 초기화."""
+        """AI Server 클라이언트 초기화."""
         self.base_url = settings.ai_server_url.rstrip('/')
         self.timeout = settings.ai_request_timeout
         self.max_retries = settings.ai_max_retries
         
-        logger.info(f"✅ AIServiceClient 초기화: {self.base_url}")
-        logger.info(f"   - 타임아웃: {self.timeout}초")
-        logger.info(f"   - 최대 재시도: {self.max_retries}회")
+        logger.info(f"AIServiceClient initialized: {self.base_url}")
     
     # =========================================================================
-    # 1️⃣ 기기 제어 명령 전송
+    # Device Control
     # =========================================================================
     
     async def send_device_control(
@@ -47,23 +36,10 @@ class AIServiceClient:
         action: str,
         params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """
-        기기 제어 명령을 AI Server로 전송합니다.
+        """기능: 기기 제어 명령을 AI Server로 전송.
         
-        Args:
-            user_id: 사용자 ID
-            device_id: 기기 ID (예: "ac_001")
-            action: 제어 액션 (예: "turn_on", "turn_off", "temp_25")
-            params: 추가 파라미터 (선택사항)
-        
-        Returns:
-            제어 결과:
-            {
-                "success": true,
-                "message": "기기 제어 완료",
-                "device_id": "ac_001",
-                "action": "turn_on"
-            }
+        input: user_id, device_id, action, params
+        output: 제어 결과 (success, message, device_id, action)
         """
         url = f"{self.base_url}/api/lg/control"
         
@@ -77,12 +53,7 @@ class AIServiceClient:
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(
-                    f"📤 [1️⃣ 기기 제어] AI Server로 전송: POST {url}\n"
-                    f"   - device_id: {device_id}\n"
-                    f"   - action: {action}\n"
-                    f"   - params: {params}"
-                )
+                logger.info(f"Send device control: {device_id}, action: {action}")
                 
                 response = await client.post(
                     url,
@@ -93,56 +64,34 @@ class AIServiceClient:
                 response.raise_for_status()
                 
                 result = response.json()
-                logger.info(
-                    f"✅ [기기 제어 완료]\n"
-                    f"   - device_id: {device_id}\n"
-                    f"   - action: {action}\n"
-                    f"   - message: {result.get('message')}"
-                )
+                logger.info(f"Device control success: {device_id}, action: {action}")
                 
                 return result
                 
         except Exception as e:
-            logger.error(f"❌ 기기 제어 실패: {e}")
+            logger.error(f"Device control failed: {e}")
             return {
                 "success": False,
-                "message": f"기기 제어 실패: {str(e)}",
+                "message": f"Device control failed: {str(e)}",
                 "device_id": device_id,
                 "action": action
             }
     
     # =========================================================================
-    # 2️⃣ 기기 목록 조회
+    # Get User Devices
     # =========================================================================
     
     async def get_user_devices(self, user_id: str) -> list[Dict[str, Any]]:
-        """
-        사용자의 기기 목록을 AI 서버에서 조회합니다.
+        """기능: 사용자의 기기 목록을 AI Server에서 조회.
         
-        AI Server는 LG Gateway의 /api/lg/devices에서 조회한 기기 목록을 반환합니다.
-        
-        Args:
-            user_id: 사용자 ID
-        
-        Returns:
-            기기 목록 (LG Gateway 형식):
-            [
-                {
-                    "deviceId": "9c4d22060d9f...",
-                    "deviceInfo": {
-                        "deviceType": "DEVICE_AIR_PURIFIER",
-                        "modelName": "LG Air Purifier",
-                        "alias": "공기청정기",
-                        "reportable": true
-                    }
-                }
-            ]
+        input: user_id
+        output: 기기 목록 (LG Gateway 형식)
         """
         url = f"{self.base_url}/api/gaze/devices"
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"📤 AI 서버 기기 목록 요청: GET {url}")
+                logger.info(f"Get user devices: user_id={user_id}")
                 
                 response = await client.get(
                     url,
@@ -154,28 +103,25 @@ class AIServiceClient:
                 
                 result = response.json()
                 
-                # ✅ AI Server 응답 형식에 따라 유연하게 처리
                 devices = []
                 
-                # 방법 1: {"devices": [...]} - 권장
                 if isinstance(result, dict) and "devices" in result:
                     devices = result.get("devices", [])
                 
-                # 방법 2: 배열 직접 반환
                 elif isinstance(result, list):
                     devices = result
-                    logger.warning("⚠️ AI Server가 배열을 직접 반환함 (권장: {\"devices\": [...]} 형식)")
+                    logger.warning("AI Server returned array directly (recommended: {\"devices\": [...]} format)")
                 
-                logger.info(f"✅ AI 서버에서 {len(devices)}개 기기 조회됨")
+                logger.info(f"Fetched {len(devices)} devices from AI Server")
                 
                 return devices
                 
         except Exception as e:
-            logger.warning(f"❌ AI 서버 기기 목록 조회 실패: {e}")
+            logger.warning(f"Failed to get user devices: {e}")
             return []
     
     # =========================================================================
-    # 3️⃣ 사용자 등록
+    # Register User
     # =========================================================================
     
     async def register_user_async(
@@ -184,18 +130,10 @@ class AIServiceClient:
         username: str,
         has_calibration: bool,
     ) -> Dict[str, Any]:
-        """
-        사용자를 AI 서버에 등록합니다 (비동기).
+        """기능: 사용자를 AI Server에 등록 (비동기 백그라운드).
         
-        이 메서드는 로그인 응답을 지연시키지 않도록 비동기 백그라운드 작업으로 실행됩니다.
-        
-        Args:
-            user_id: 로컬 SQLite의 사용자 ID
-            username: 사용자명
-            has_calibration: 캘리브레이션 여부
-        
-        Returns:
-            AI 서버의 응답
+        input: user_id, username, has_calibration
+        output: AI Server 응답 (success, message)
         """
         url = f"{self.base_url}/api/users/register"
         
@@ -208,7 +146,7 @@ class AIServiceClient:
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"📤 AI 서버 사용자 등록: POST {url} (username={username})")
+                logger.info(f"Register user with AI Server: {username}")
                 
                 response = await client.post(
                     url,
@@ -219,19 +157,19 @@ class AIServiceClient:
                 response.raise_for_status()
                 
                 result = response.json()
-                logger.info(f"✅ AI 서버 사용자 등록 성공: {username}")
+                logger.info(f"User registration success: {username}")
                 
                 return result
                 
         except Exception as e:
-            logger.warning(f"⚠️ AI 서버 사용자 등록 실패 (비동기): {e}")
+            logger.warning(f"User registration failed (async): {e}")
             return {
                 "success": False,
-                "message": f"AI 서버 등록 실패: {str(e)}"
+                "message": f"User registration failed: {str(e)}"
             }
     
     # =========================================================================
-    # 2️⃣ 추천 피드백 전송 (YES/NO)
+    # Recommendation Feedback
     # =========================================================================
     
     async def send_recommendation_feedback(
@@ -240,19 +178,10 @@ class AIServiceClient:
         user_id: str,
         accepted: bool
     ) -> Dict[str, Any]:
-        """
-        추천 피드백 (YES/NO)을 AI Server로 전송합니다.
-        Args:
-            recommendation_id: 추천 ID
-            user_id: 사용자 ID
-            accepted: True(YES) 또는 False(NO)
+        """기능: 추천 피드백 (YES/NO)을 AI Server로 전송.
         
-        Returns:
-            결과:
-            {
-                "status": "success",
-                "message": "피드백이 저장되었습니다"
-            }
+        input: recommendation_id, user_id, accepted
+        output: 결과 (status, message)
         """
         url = f"{self.base_url}/api/gaze/feedback"
         
@@ -265,11 +194,7 @@ class AIServiceClient:
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(
-                    f"📤 [2️⃣ 추천 피드백] AI Server로 전송: POST {url}\n"
-                    f"   - recommendation_id: {recommendation_id}\n"
-                    f"   - accepted: {accepted} ({'YES' if accepted else 'NO'})"
-                )
+                logger.info(f"Send recommendation feedback: {recommendation_id}, accepted={accepted}")
                 
                 response = await client.post(
                     url,
@@ -280,34 +205,27 @@ class AIServiceClient:
                 response.raise_for_status()
                 
                 result = response.json()
-                logger.info(
-                    f"✅ [피드백 저장 완료]\n"
-                    f"   - accepted: {accepted} ({'YES' if accepted else 'NO'})"
-                )
+                logger.info(f"Recommendation feedback sent: accepted={accepted}")
                 
                 return result
                 
         except Exception as e:
-            logger.error(f"❌ 피드백 전송 실패: {e}")
+            logger.error(f"Failed to send recommendation feedback: {e}")
             return {
                 "success": False,
-                "message": f"피드백 전송 실패: {str(e)}"
+                "message": f"Feedback failed: {str(e)}"
             }
     
     # =========================================================================
-    # Fallback
+    # Fallback Response
     # =========================================================================
     
     @staticmethod
     def _get_fallback_response(request: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        AI 서버 통신 실패 시 기본 응답을 반환합니다.
+        """기능: AI Server 오류 시 기본 응답 반환.
         
-        Args:
-            request: 원본 요청 정보
-        
-        Returns:
-            기본 응답 (click_id + 기본 추천)
+        input: request (원본 요청)
+        output: 기본 응답
         """
         device_info = request.get("clicked_device", {})
         
