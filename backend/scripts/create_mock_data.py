@@ -71,35 +71,40 @@ def create_mock_recommendations():
             "title": "에어컨 켜시겠어요?",
             "contents": "현재 실내 온도가 28도로 높습니다. 에어컨을 켜시겠어요?",
             "device_id": "ac_001",
-            "action": "turn_on"
+            "action": "turn_on",
+            "confidence": 0.95
         },
         {
             "recommendation_id": "rec_002",
             "title": "조명을 켜시겠어요?",
             "contents": "주변이 어두워졌습니다. 거실 조명을 켜시겠어요?",
             "device_id": "light_001",
-            "action": "turn_on"
+            "action": "turn_on",
+            "confidence": 0.88
         },
         {
             "recommendation_id": "rec_003",
             "title": "TV 음량 조정",
             "contents": "TV 음량이 너무 큽니다. 줄여드릴까요?",
             "device_id": "tv_001",
-            "action": "volume_down"
+            "action": "volume_down",
+            "confidence": 0.82
         },
         {
             "recommendation_id": "rec_004",
             "title": "선풍기 켜기",
             "contents": "공기 흐름이 필요합니다. 선풍기를 켜시겠어요?",
             "device_id": "fan_001",
-            "action": "turn_on"
+            "action": "turn_on",
+            "confidence": 0.90
         },
         {
             "recommendation_id": "rec_005",
             "title": "문 잠금 확인",
             "contents": "현관 스마트락이 잠겨있지 않습니다. 잠그시겠어요?",
             "device_id": "door_001",
-            "action": "lock"
+            "action": "lock",
+            "confidence": 0.98
         }
     ]
     return recommendations
@@ -205,9 +210,11 @@ def save_mock_data():
         print("\n🧪 Postman 테스트 시:") 
         print(f"   POST /api/users/login")
         print(f"   GET /api/devices")
+        print(f"   POST /api/devices/{{device_id}}/click")
         print(f"   POST /api/recommendations (아래 중 선택)")
         for rec in recommendations[:2]:
             print(f"      - {rec['recommendation_id']}: {rec['title']}")
+        print(f"   POST /api/recommendations/feedback")
         
         print("\n💾 생성된 파일:")
         print(f"   - {calibration_json_file}")

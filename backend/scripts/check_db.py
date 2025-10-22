@@ -111,7 +111,9 @@ def display_test_commands():
     print("\n[3] 기기 클릭")
     print("  Method: POST")
     print("  URL: http://localhost:8080/api/devices/ac_001/click")
-    print(f"  Body: {{'user_id': '{user_id}'}}")
+    print(f"""  Body: {{
+    "user_id": "{user_id}"
+  }}""")
     
     print("\n[4] 추천 수신")
     print("  Method: POST")
@@ -120,7 +122,10 @@ def display_test_commands():
     "recommendation_id": "rec_001",
     "title": "에어컨 켜시겠어요?",
     "contents": "현재 실내 온도가 28도로 높습니다.",
-    "user_id": "{user_id}"
+    "user_id": "{user_id}",
+    "device_id": "ac_001",
+    "action": "turn_on",
+    "confidence": 0.95
   }}""")
     
     print("\n[5] 피드백 제출 (YES)")
