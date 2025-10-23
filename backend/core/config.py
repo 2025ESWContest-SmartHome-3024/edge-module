@@ -73,8 +73,10 @@ class Settings(BaseSettings):
         return (self.screen_width, self.screen_height)
     
     class Config:
-        """Pydantic 설정."""
-        env_file = ".env"
+        """Pydantic 설정 - 라즈베리파이 최적화."""
+        # 절대 경로로 .env 파일 명시
+        # edge-module 루트의 .env 파일 로드
+        env_file = str(Path(__file__).parent.parent.parent / ".env")
         env_file_encoding = "utf-8"
 
 

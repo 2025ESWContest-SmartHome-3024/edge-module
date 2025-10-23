@@ -7,6 +7,12 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+# .env 파일 명시적 경로 설정 및 확인
+env_file = project_root / ".env"
+if not env_file.exists():
+    print(f"⚠️  Warning: .env file not found at {env_file}")
+    print("ℹ️  Using default configuration...")
+
 import uvicorn
 from backend.core.config import settings
 

@@ -20,7 +20,7 @@ export default defineConfig({
             '/api': {
                 // REST API 요청을 백엔드 서버로 프록시
                 // 개발: http://127.0.0.1:8000
-                // 프로덕션: http://edge-module:8000
+                // 프로덕션: http://raspberrypi.local:8000
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
                 // 요청 경로 재작성: /api/... → /...
