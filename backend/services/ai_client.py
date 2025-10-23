@@ -169,32 +169,39 @@ class AIServiceClient:
             }
     
     # =========================================================================
-    # Recommendation Feedback
+    # Device Click Event
     # =========================================================================
     
-    async def send_recommendation_feedback(
+    async def send_device_click(
         self,
-        recommendation_id: str,
         user_id: str,
-        accepted: bool
+        device_id: str,
+        device_name: str,
+        device_type: str,
+        action: str
     ) -> Dict[str, Any]:
-        """기능: 추천 피드백 (YES/NO)을 AI Server로 전송.
+        """기능: 기기 클릭 이벤트를 AI Server로 전송.
         
-        args: recommendation_id, user_id, accepted
-        return: 결과 (status, message)
+        args: user_id, device_id, device_name, device_type, action
+        return: 결과 (success, message, recommendation)
         """
-        url = f"{self.base_url}/api/gaze/feedback"
+        url = f"{self.base_url}/api/gaze/click"
         
         payload = {
-            "recommendation_id": recommendation_id,
             "user_id": user_id,
-            "accepted": accepted,
+            "device_id": device_id,
+            "device_name": device_name,
+            "device_type": device_type,
+            "action": action,
             "timestamp": datetime.now(KST).isoformat()
         }
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"Send recommendation feedback: {recommendation_id}, accepted={accepted}")
+                logger.info(
+                    f"Send device click: user_id={user_id}, device_id={device_id}, "
+                    f"action={action}"
+                )
                 
                 response = await client.post(
                     url,
@@ -205,15 +212,15 @@ class AIServiceClient:
                 response.raise_for_status()
                 
                 result = response.json()
-                logger.info(f"Recommendation feedback sent: accepted={accepted}")
+                logger.info(f"Device click processed: {device_id}, action: {action}")
                 
                 return result
                 
         except Exception as e:
-            logger.error(f"Failed to send recommendation feedback: {e}")
+            logger.warning(f"Failed to send device click: {e}")
             return {
                 "success": False,
-                "message": f"Feedback failed: {str(e)}"
+                "message": f"Failed to send device click: {str(e)}"
             }
     
     # =========================================================================

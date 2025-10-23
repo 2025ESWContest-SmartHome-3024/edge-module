@@ -61,6 +61,22 @@ function HomePage({ onLogout }) {
         const storedUsername = localStorage.getItem('gazehome_username') || '사용자'
         setUsername(storedUsername)
 
+        // 🔔 Browser Notification 권한 요청
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission().then(permission => {
+                if (permission === 'granted') {
+                    console.log('[HomePage] 🔔 Browser Notification 권한 승인됨')
+                    // 권한 승인 시 시작 알림
+                    new Notification('🏠 GazeHome에 오신 것을 환영합니다!', {
+                        body: `${storedUsername}님, 시선으로 스마트홈을 제어해보세요.`,
+                        icon: '/gazehome-icon.png'
+                    })
+                } else {
+                    console.log('[HomePage] ⚠️ Browser Notification 권한 거부됨')
+                }
+            })
+        }
+
         loadDevices()
         loadRecommendations()
         connectGazeStream()
@@ -107,26 +123,35 @@ function HomePage({ onLogout }) {
      */
     const loadDevices = async () => {
         try {
-            const response = await fetch('/api/devices')
+            const response = await fetch('/api/devices/')
             const data = await response.json()
 
             // Backend 응답 형식: { "success": true, "devices": [...], "count": 3, "source": "ai_server" }
             if (data.success && data.devices) {
                 // 기기 객체 변환: Backend 응답 형식 → Frontend 기대 형식
-                const transformedDevices = data.devices.map((device, index) => ({
-                    id: device.device_id,
-                    name: device.device_name,
-                    type: device.device_type,
-                    room: '거실',  // Backend에서 제공하지 않음
-                    state: 'off',  // Backend에서 제공하지 않음 (기본값)
-                    metadata: {
-                        current_temp: device.metadata?.current_temp,
-                        target_temp: device.metadata?.target_temp,
-                        mode: device.metadata?.mode,
-                        brightness: device.metadata?.brightness,
-                        pm25: device.metadata?.pm25,
+                const transformedDevices = data.devices.map((device, index) => {
+                    // metadata.status에서 on/off 상태 추출
+                    const status = device.metadata?.status || 'off'
+
+                    return {
+                        id: device.device_id,
+                        name: device.device_name,
+                        type: device.device_type,
+                        room: '거실',  // Backend에서 제공하지 않음
+                        state: status,  // ✅ metadata.status에서 가져옴
+                        metadata: {
+                            current_temp: device.metadata?.current_temp,
+                            target_temp: device.metadata?.target_temp,
+                            mode: device.metadata?.mode,
+                            brightness: device.metadata?.brightness,
+                            speed: device.metadata?.speed,
+                            power: device.metadata?.power,
+                            temp: device.metadata?.temp,
+                            pm25: device.metadata?.pm25,
+                        }
                     }
-                }))
+                })
+                console.log('[HomePage] 기기 목록 로드 성공:', transformedDevices)
                 setDevices(transformedDevices)
             } else {
                 console.warn('기기 목록 응답 형식 오류:', data)
@@ -181,17 +206,53 @@ function HomePage({ onLogout }) {
                 }
 
                 // � 시선 인식 가능 여부 (false = 시선 불인식, 포인터 마지막 위치 고정)
+                // 시선 인식 가능 여부 (false = 시선 불인식, 포인터 마지막 위치 고정)
                 if (data.calibrated !== undefined) {
                     setCalibrated(data.calibrated)
                 }
 
-                // �👁️ 1초 이상 눈깜빡임 감지
+                // 1초 이상 눈깜빡임 감지
                 if (data.prolonged_blink !== undefined) {
                     setProlongedBlink(data.prolonged_blink)
 
                     if (data.prolonged_blink) {
                         console.log('[HomePage] 눈깜빡임 1초+ 감지 - 클릭으로 인식!')
                     }
+                }
+            }
+
+            // MQTT로부터 받은 추천 메시지 처리
+            if (data.type === 'recommendation') {
+                console.log('[HomePage] MQTT 추천 수신:', data.title)
+                console.log('[HomePage] 추천 내용:', data.content)
+                console.log('[HomePage] 추천 시간:', new Date().toLocaleString())
+
+                const recommendation = {
+                    id: `rec_mqtt_${Date.now()}`,
+                    title: data.title,
+                    description: data.content,
+                    device_id: null,
+                    device_name: 'AI 추천',
+                    action: null,
+                    params: {},
+                    reason: data.content,
+                    priority: 3,
+                    timestamp: new Date().toISOString()
+                }
+
+                setRecommendations([recommendation])
+                setShowRecommendations(true)
+
+                // 🔔 Browser Notification API를 통한 알람
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('🏠 GazeHome 추천', {
+                        body: data.title,
+                        icon: '/gazehome-icon.png',
+                        badge: '/gazehome-badge.png',
+                        tag: 'mqtt-recommendation',
+                        requireInteraction: true
+                    })
+                    console.log('[HomePage] 🔔 Browser Notification 발송됨')
                 }
             }
         }
@@ -326,8 +387,15 @@ function HomePage({ onLogout }) {
                                 <span>{username}</span>
                             </div>
 
-                            {/* 설정 버튼 */}
-                            <button className="icon-button" onClick={() => window.location.href = '/settings'} title="설정">
+                            {/* 설정 버튼 → 다시 보정 화면 */}
+                            <button
+                                className="icon-button"
+                                onClick={() => {
+                                    console.log('[HomePage] 🔄 보정 다시 시작')
+                                    window.location.href = '/calibration'
+                                }}
+                                title="다시 보정"
+                            >
                                 <Settings size={20} />
                             </button>
 

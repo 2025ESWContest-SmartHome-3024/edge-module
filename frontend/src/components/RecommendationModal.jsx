@@ -60,8 +60,8 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
      * - 피드백 전송
      * - 콜백 실행
      */
-    const handleButtonClick = async (callback, accepted = true) => {
-        // 🔒 1.5초 포인터 고정 시작
+    const handleButtonClick = async (callback, confirm = true) => {
+        // 포인터 고정 시작
         console.log(`[RecommendationModal] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
         setIsLocked(true)
 
@@ -76,20 +76,24 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             setIsLocked(false)
         }, LOCK_DURATION)
 
-        // 피드백 전송
-        try {
-            await fetch('/api/recommendations/feedback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    recommendation_id: topRecommendation.id || topRecommendation.recommendation_id,
-                    user_id: localStorage.getItem('gazehome_user_id') || '1',
-                    accepted: accepted
-                }),
-            })
-            console.log(`[RecommendationModal] 피드백 전송: ${accepted ? '수락' : '거절'}`)
-        } catch (error) {
-            console.error('[RecommendationModal] 피드백 전송 실패:', error)
+        // MQTT 추천인 경우만 피드백 전송 (device_id가 없음)
+        if (topRecommendation.id.startsWith('rec_mqtt')) {
+            try {
+                await fetch('/api/recommendations/feedback', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        title: topRecommendation.title,
+                        confirm: confirm
+                    }),
+                })
+                console.log(`[RecommendationModal] MQTT 피드백 전송: ${confirm ? 'YES' : 'NO'}`)
+            } catch (error) {
+                console.error('[RecommendationModal] 피드백 전송 실패:', error)
+            }
+        } else {
+            // 일반 추천 (device click)은 피드백 없음
+            console.log(`[RecommendationModal] 일반 추천 (device click) - 피드백 생략`)
         }
 
         // 콜백 실행
@@ -149,7 +153,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+        // MQTT 팝업 - 오버레이 클릭 시 닫지 않음
         >
             <motion.div
                 className="recommendation-modal"
@@ -162,11 +166,9 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                 <div className="modal-header">
                     <div className="modal-title">
                         <Sparkles size={24} className="title-icon" />
-                        <h2>AI 추천</h2>
+                        <h2>🔔 AI 추천</h2>
                     </div>
-                    <button className="close-button" onClick={onClose}>
-                        <X size={24} />
-                    </button>
+                    {/* close 버튼 제거 - MQTT 팝업은 영구 표시 */}
                 </div>
 
                 {/* 주요 추천 사항 */}
@@ -204,7 +206,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                         </div>
                     </div>
 
-                    {/* 액션 버튼 */}
+                    {/* 액션 버튼 - YES만 표시 (팝업 유지) */}
                     <div className="modal-actions">
                         <button
                             className="action-button accept"
@@ -218,21 +220,9 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             }}
                         >
                             <CheckCircle size={20} />
-                            적용하기
+                            👍 수락
                         </button>
-                        <button
-                            className="action-button dismiss"
-                            onClick={() => handleButtonClick(onClose, false)}
-                            disabled={isLocked}
-                            onMouseEnter={() => {
-                                if (!isLocked && onPointerEnter) {
-                                    console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
-                                    onPointerEnter(1500)
-                                }
-                            }}
-                        >
-                            나중에
-                        </button>
+                        {/* 👎 거절 버튼 제거 - MQTT 팝업은 항상 표시 */}
                     </div>
                 </div>
 
