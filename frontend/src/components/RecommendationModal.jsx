@@ -153,7 +153,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+        // MQTT 팝업 - 오버레이 클릭 시 닫지 않음
         >
             <motion.div
                 className="recommendation-modal"
@@ -166,11 +166,9 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                 <div className="modal-header">
                     <div className="modal-title">
                         <Sparkles size={24} className="title-icon" />
-                        <h2>AI 추천</h2>
+                        <h2>🔔 AI 추천</h2>
                     </div>
-                    <button className="close-button" onClick={onClose}>
-                        <X size={24} />
-                    </button>
+                    {/* close 버튼 제거 - MQTT 팝업은 영구 표시 */}
                 </div>
 
                 {/* 주요 추천 사항 */}
@@ -208,7 +206,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                         </div>
                     </div>
 
-                    {/* 액션 버튼 */}
+                    {/* 액션 버튼 - YES만 표시 (팝업 유지) */}
                     <div className="modal-actions">
                         <button
                             className="action-button accept"
@@ -222,21 +220,9 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             }}
                         >
                             <CheckCircle size={20} />
-                            적용하기
+                            👍 수락
                         </button>
-                        <button
-                            className="action-button dismiss"
-                            onClick={() => handleButtonClick(onClose, false)}
-                            disabled={isLocked}
-                            onMouseEnter={() => {
-                                if (!isLocked && onPointerEnter) {
-                                    console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
-                                    onPointerEnter(1500)
-                                }
-                            }}
-                        >
-                            나중에
-                        </button>
+                        {/* 👎 거절 버튼 제거 - MQTT 팝업은 항상 표시 */}
                     </div>
                 </div>
 

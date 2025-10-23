@@ -7,8 +7,9 @@ import './SettingsPage.css'
  * - 필터 설정 (Kalman 필터)
  * - Kalman 매개변수 튜닝
  * - 추적기 정보 표시 (모델, 필터, 보정 상태)
+ * - 재보정 시작
  */
-function SettingsPage() {
+function SettingsPage({ onRecalibrate }) {
     // 필터 설정 정보
     const [filterInfo, setFilterInfo] = useState(null)
     // 추적기 상태 정보
@@ -142,10 +143,12 @@ function SettingsPage() {
         setMessageType('info')
 
         try {
-            // 재보정 상태를 localStorage에 저장
-            localStorage.setItem('gazehome_needs_recalibration', 'true')
+            // App.jsx의 handleRecalibrate 호출
+            if (onRecalibrate) {
+                onRecalibrate()
+            }
 
-            // 1초 후 보정 페이지로 이동
+            // 1초 후 보정 페이지로 자동 이동
             setTimeout(() => {
                 window.location.href = '/calibration'
             }, 500)

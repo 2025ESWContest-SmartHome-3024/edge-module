@@ -178,3 +178,23 @@
     background: white;
     border-radius: var(--radius-full);
 }
+
+/* 🔔 MQTT 알람 애니메이션 */
+@keyframes pulse-alarm {
+    0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+
+    50% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    }
+}
+
+.device-card.alarm-pulse {
+    animation: pulse-alarm 2s infinite;
+    border-color: var(--danger);
+}

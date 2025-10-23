@@ -4,6 +4,7 @@ import OnboardingPage from './pages/OnboardingPage'
 import HomePage from './pages/HomePage'
 import CalibrationPage from './pages/CalibrationPage'
 import SettingsPage from './pages/SettingsPage'
+import { mqttMonitor } from './utils/mqttMonitor'
 
 /**
  * 메인 애플리케이션 컴인터
@@ -20,61 +21,37 @@ function App() {
     const [isCalibrated, setIsCalibrated] = useState(false)
 
     /**
-     * 앱 초기화: localStorage에서 로그인 상태 복원
+     * 앱 초기화: 자동 로그인 및 보정 상태 확인
+     * - 첫 방문: 자동 로그인 → 보정 화면
+     * - 보정 완료: 자동 홈 화면
      */
     useEffect(() => {
+        // 개발자 도구에서 MQTT 모니터링 사용 가능하도록 설정
+        console.log('%c💡 개발자 모드 활성화', 'background: blue; color: white; padding: 5px 10px; font-weight: bold')
+        console.log('%c🔔 MQTT 모니터링을 시작하려면 콘솔에 입력: window.mqttMonitor.start()', 'color: green; font-weight: bold')
+
         // localStorage에서 로그인 정보 확인
         const loggedIn = localStorage.getItem('gazehome_logged_in') === 'true'
         const username = localStorage.getItem('gazehome_username')
 
-        setIsLoggedIn(loggedIn)
-
-        // 로그인된 사용자의 보정 데이터 확인
+        // 이미 로그인된 경우
         if (loggedIn && username) {
+            console.log('[App] 💾 localStorage에서 로그인 상태 복원:', username)
+            setIsLoggedIn(true)
             checkCalibrationStatus(username)
+        } else {
+            // 첫 방문 사용자 - 자동 로그인
+            console.log('[App] 🆕 첫 방문 사용자 - 자동 로그인 시작')
+            handleAutoLogin()
         }
     }, [])
 
     /**
-     * 사용자의 시선 보정 상태 확인
-     * @param {string} username - 사용자명
+     * 자동 로그인 처리 (첫 방문 사용자)
      */
-    const checkCalibrationStatus = async (username) => {
+    const handleAutoLogin = async () => {
         try {
-            console.log(`[App] 사용자 보정 상태 확인: "${username}"`)
-            const response = await fetch('/api/calibration/list')
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`)
-            }
-            const data = await response.json()
-
-            console.log(`[App] 사용 가능한 보정 파일:`, data.calibrations.map(c => c.name))
-
-            // 사용자별 보정 파일 존재 확인
-            const userCalibrationFile = `${username}.pkl`
-            console.log(`[App] 찾는 파일: "${userCalibrationFile}"`)
-
-            const hasUserCalibration = data.calibrations.some(
-                cal => {
-                    console.log(`[App] 비교: "${cal.name}" === "${userCalibrationFile}": ${cal.name === userCalibrationFile}`)
-                    return cal.name === userCalibrationFile
-                }
-            )
-
-            setIsCalibrated(hasUserCalibration)
-            console.log(`[App] ${username} 보정 결과: ${hasUserCalibration ? '✅ 찾음' : '❌ 없음'}`)
-        } catch (error) {
-            console.error('보정 상태 확인 실패:', error)
-            setIsCalibrated(false)
-        }
-    }
-
-    /**
-     * 사용자 로그인 처리 (데모 모드: 고정된 demo_user 사용)
-     */
-    const handleLogin = async () => {
-        try {
-            console.log('[App] 로그인 시작...')
+            console.log('[App] 🚀 자동 로그인 중...')
 
             // 백엔드 로그인 API 호출
             const response = await fetch('/api/users/login', {
@@ -87,22 +64,57 @@ function App() {
             }
 
             const data = await response.json()
-            console.log('[App] 로그인 응답:', data)
+            console.log('[App] ✅ 자동 로그인 성공:', data)
 
-            // localStorage에 저장 (백엔드에서 반환된 username 사용)
+            // localStorage에 저장
             const username = data.username
             localStorage.setItem('gazehome_logged_in', 'true')
             localStorage.setItem('gazehome_username', username)
             setIsLoggedIn(true)
 
-            // 데이터베이스에서 보정 상태 설정
+            // 보정 상태 확인
             setIsCalibrated(data.has_calibration)
-            console.log(`[App] 사용자 ${username} 보정 상태: ${data.has_calibration ? '✅ 보정됨' : '❌ 미보정'}`)
+            console.log(`[App] 보정 상태: ${data.has_calibration ? '✅ 보정됨' : '❌ 미보정'}`)
 
         } catch (error) {
-            console.error('[App] 로그인 오류:', error)
-            alert(`로그인 실패: ${error.message}`)
+            console.error('[App] ❌ 자동 로그인 실패:', error)
+            // 실패해도 로그인 페이지로 이동
+            setIsLoggedIn(false)
         }
+    }
+
+    /**
+     * 사용자의 시선 보정 상태 확인
+     * @param {string} username - 사용자명
+     */
+    const checkCalibrationStatus = async (username) => {
+        try {
+            console.log(`[App] 📊 사용자 보정 상태 확인: "${username}"`)
+            const response = await fetch('/api/calibration/list')
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`)
+            }
+            const data = await response.json()
+
+            // 사용자별 보정 파일 존재 확인
+            const userCalibrationFile = `${username}.pkl`
+            const hasUserCalibration = data.calibrations.some(
+                cal => cal.name === userCalibrationFile
+            )
+
+            setIsCalibrated(hasUserCalibration)
+            console.log(`[App] ${hasUserCalibration ? '✅ 보정 완료' : '❌ 미보정'} - ${username}`)
+        } catch (error) {
+            console.error('[App] ⚠️ 보정 상태 확인 실패:', error)
+            setIsCalibrated(false)
+        }
+    }
+
+    /**
+     * 사용자 로그인 처리 (온보딩 페이지 버튼 클릭 시)
+     */
+    const handleLogin = async () => {
+        await handleAutoLogin()
     }
 
     /**
@@ -117,10 +129,21 @@ function App() {
 
     /**
      * 시선 보정 완료 처리
+     * - 보정 파일이 저장되었으므로 상태 업데이트
+     * - 다시 보정해야 할 경우 설정 페이지에서 처리
      */
     const handleCalibrationComplete = () => {
-        // 보정 완료 시 홈으로 이동 가능하도록 상태 업데이트
+        console.log('[App] ✅ 보정 완료')
         setIsCalibrated(true)
+    }
+
+    /**
+     * 보정 다시 시작 (설정 페이지에서 호출)
+     */
+    const handleRecalibrate = () => {
+        console.log('[App] 🔄 보정 다시 시작')
+        setIsCalibrated(false)
+        // /calibration 페이지로 자동 이동됨
     }
 
     return (
@@ -174,7 +197,7 @@ function App() {
                     path="/settings"
                     element={
                         isLoggedIn ? (
-                            <SettingsPage />
+                            <SettingsPage onRecalibrate={handleRecalibrate} />
                         ) : (
                             <Navigate to="/" replace />
                         )

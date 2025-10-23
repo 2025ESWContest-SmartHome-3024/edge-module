@@ -213,7 +213,6 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
 
     /**
      * 기기 토글 핸들러 (시선 클릭 시 AI 서버로 요청)
-     * 🔒 제어 중이면 return
      * 
      * 1. POST /api/devices/{device_id}/click 호출 (Backend)
      * 2. Backend가 AI 서버에서 추천받기
@@ -221,12 +220,6 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
      * 4. RecommendationModal에서 사용자 선택 대기
      */
     const handleToggle = async () => {
-        // 🔒 다른 기기 제어 중이면 return
-        if (isControlling) {
-            console.log(`[DeviceCard] 제어 중 - 건너뜀: ${device.name}`)
-            return
-        }
-
         try {
             console.log(`[DeviceCard] 시선 클릭: ${device.name}`)
 
@@ -362,14 +355,8 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
                 <button
                     className={`control-button ${isOn ? 'on' : 'off'}`}
                     onClick={handleToggle}
-                    disabled={isControlling}
-                    style={{
-                        opacity: isControlling ? 0.5 : 1,
-                        cursor: isControlling ? 'not-allowed' : 'pointer',
-                        pointerEvents: isControlling ? 'none' : 'auto'
-                    }}
                     onMouseEnter={() => {
-                        if (!isControlling && onPointerEnter) {
+                        if (onPointerEnter) {
                             console.log(`[DeviceCard Button] 포인터 버튼 진입 - 1.5초 고정`)
                             onPointerEnter(1500)
                         }
