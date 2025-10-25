@@ -284,21 +284,6 @@ controlWs.send(JSON.stringify({
 
 3. **`backend/integrations/home_assistant.py`에서 통합 구현** (TODO)
 
-### MQTT
-
-1. **MQTT 브로커 설치** (Mosquitto):
-   ```bash
-   sudo apt-get install mosquitto mosquitto-clients
-   ```
-
-2. **`.env`에서 설정**:
-   ```env
-   MQTT_BROKER=localhost
-   MQTT_PORT=1883
-   ```
-
-3. **`backend/integrations/mqtt.py`에서 통합 구현** (TODO)
-
 ## 개발
 
 ### 개발 모드에서 실행
@@ -422,7 +407,6 @@ python -c "import cv2; cap = cv2.VideoCapture(0); print('OK' if cap.isOpened() e
 - [ ] ✅ Web-based calibration API (COMPLETED!)
 - [ ] React frontend for calibration
 - [ ] Home Assistant integration
-- [ ] MQTT integration
 - [ ] User authentication
 - [ ] Device state persistence
 - [ ] Real AI recommendation model

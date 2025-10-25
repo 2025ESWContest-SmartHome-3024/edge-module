@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './GazeCursor.css'
 
 /**
@@ -23,6 +23,7 @@ function GazeCursor({ x, y, visible, blink = false, calibrated = true }) {
     })
 
     const prevBlinkRef = useRef(false)
+    const [debounceTimer, setDebounceTimer] = useState(null)
     const shouldFreeze = blink || !calibrated
 
     // 고정되기 직전에 현재 위치를 유효 위치로 갱신
@@ -32,20 +33,34 @@ function GazeCursor({ x, y, visible, blink = false, calibrated = true }) {
         }
     }, [x, y, shouldFreeze])
 
-    // 👁️ 깜빡임 끝남 감지 → 시선 위치 요소 클릭
+    // 👁️ 깜빡임 끝남 감지 → 시선 위치 요소 클릭 (50ms 디바운싱)
     useEffect(() => {
-        // blink: false → true (깜빡임 시작)는 무시
-        // blink: true → false (깜빡임 끝) 감지 필요
-        if (!blink && prevBlinkRef.current) {
-            // 깜빡임 완료 → 시선 위치의 요소 클릭
-            const element = document.elementFromPoint(lastValidPosRef.current.x, lastValidPosRef.current.y)
-            if (element && element !== document.body && element !== document.documentElement) {
-                console.log('[GazeCursor] 깜빡임 클릭 감지:', element.className)
-                element.click()
-            }
+        // blink: true → false 전환만 감지 (깜빡임 완료)
+        if (!blink && prevBlinkRef.current && !debounceTimer) {
+            // 50ms 디바운싱: 과도한 호출 방지
+            const timer = setTimeout(() => {
+                const element = document.elementFromPoint(
+                    lastValidPosRef.current.x,
+                    lastValidPosRef.current.y
+                )
+
+                if (element && element !== document.body && element !== document.documentElement) {
+                    console.log('[GazeCursor] 깜빡임 클릭 감지:', element.className)
+                    element.click()
+                }
+
+                setDebounceTimer(null)
+            }, 50)
+
+            setDebounceTimer(timer)
         }
+
         prevBlinkRef.current = blink
-    }, [blink])
+
+        return () => {
+            if (debounceTimer) clearTimeout(debounceTimer)
+        }
+    }, [blink, debounceTimer])
 
     if (!visible) return null
 
@@ -58,8 +73,9 @@ function GazeCursor({ x, y, visible, blink = false, calibrated = true }) {
             animate={{ left: displayX, top: displayY }}
             transition={{
                 type: 'spring',
-                stiffness: shouldFreeze ? 10000 : 150,
-                damping: shouldFreeze ? 100 : 55
+                stiffness: shouldFreeze ? 10000 : 100,
+                damping: shouldFreeze ? 100 : 35,
+                mass: 1
             }}
         >
             <div className="cursor-ring"></div>

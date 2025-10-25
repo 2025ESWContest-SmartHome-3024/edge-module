@@ -1,5 +1,6 @@
 """스마트 홈 디바이스 제어를 위한 REST API 엔드포인트."""
 import logging
+import time
 from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
@@ -11,53 +12,36 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # Mock 기기 데이터 (테스트용)
+# 지원되는 기기: 공기청정기, 건조기, 에어컨
 MOCK_DEVICES = [
     {
-        "device_id": "ac_living_room",
+        "device_id": "airpurifier_living_room",
+        "device_name": "거실 공기청정기",
+        "device_type": "airpurifier",
+        "metadata": {
+            "mode": "auto",
+            "pm25": 45,
+            "status": "on"
+        }
+    },
+    {
+        "device_id": "dryer_laundry",
+        "device_name": "세탁실 건조기",
+        "device_type": "dryer",
+        "metadata": {
+            "time_remaining": 45,
+            "temperature": 70,
+            "status": "off"
+        }
+    },
+    {
+        "device_id": "aircon_living_room",
         "device_name": "거실 에어컨",
-        "device_type": "air_conditioner",
+        "device_type": "aircon",
         "metadata": {
             "current_temp": 26,
             "target_temp": 24,
             "mode": "cool",
-            "status": "on"
-        }
-    },
-    {
-        "device_id": "light_bedroom",
-        "device_name": "침실 조명",
-        "device_type": "light",
-        "metadata": {
-            "brightness": 80,
-            "color_temp": "warm",
-            "status": "on"
-        }
-    },
-    {
-        "device_id": "fan_kitchen",
-        "device_name": "주방 환풍기",
-        "device_type": "fan",
-        "metadata": {
-            "speed": 2,
-            "status": "off"
-        }
-    },
-    {
-        "device_id": "tv_living_room",
-        "device_name": "거실 TV",
-        "device_type": "tv",
-        "metadata": {
-            "channel": 10,
-            "volume": 20,
-            "status": "off"
-        }
-    },
-    {
-        "device_id": "refrigerator",
-        "device_name": "냉장고",
-        "device_type": "refrigerator",
-        "metadata": {
-            "temp": 4,
             "status": "on"
         }
     }
@@ -72,22 +56,49 @@ class DeviceClickRequest(BaseModel):
 
 @router.get("/")
 async def get_devices():
-    """기능: 기기 목록 조회.
+    """기능: 기기 목록 조회 (AI-Services MongoDB와 동기화).
+    
+    AI-Services에서 MongoDB user_devices 컬렉션을 조회하여
+    호환되는 형식으로 반환합니다.
     
     args: 없음
-    return: 기기 목록, 개수, 소스 (ai_server 또는 mock)
+    return: 기기 목록 (MongoDB 필드명 사용), 개수, 동기화 상태
     """
     try:
-        logger.info("Get device list")
+        logger.info("📋 Get device list with AI-Services sync")
         
-        # 테스트 환경: Mock 데이터 반환
-        logger.info(f"Returning {len(MOCK_DEVICES)} mock devices for testing")
+        # 1️⃣ AI-Services에서 기기 목록 조회 및 동기화
+        try:
+            devices = await ai_client.get_user_devices("default_user")
+            if devices:
+                db.sync_devices(devices)
+                logger.info(f"✅ Synced {len(devices)} devices from AI-Services")
+        except Exception as e:
+            logger.warning(f"⚠️ AI-Services sync failed: {e}")
+        
+        # 2️⃣ 로컬 SQLite에서 기기 조회
+        local_devices = db.get_devices()
+        
+        # 3️⃣ MongoDB 스키마에 맞게 변환
+        formatted_devices = [
+            {
+                "device_id": d.get("device_id"),
+                "device_type": d.get("device_type"),
+                "alias": d.get("alias"),
+                "supported_actions": d.get("supported_actions", []),
+                "is_active": bool(d.get("is_active", True)),
+                "user_id": d.get("user_id", "default_user")
+            }
+            for d in local_devices
+        ]
+        
+        logger.info(f"✅ Returning {len(formatted_devices)} devices")
         
         return {
             "success": True,
-            "devices": MOCK_DEVICES,
-            "count": len(MOCK_DEVICES),
-            "source": "mock"
+            "devices": formatted_devices,
+            "count": len(formatted_devices),
+            "source": "mongodb_sync" if formatted_devices else "mock"
         }
     
     except Exception as e:
@@ -96,28 +107,32 @@ async def get_devices():
             "success": False,
             "devices": [],
             "count": 0,
-            "error": str(e)
+            "error": str(e),
+            "source": "error"
         }
 
 
 @router.post("/{device_id}/click")
 async def handle_device_click(device_id: str, request: DeviceClickRequest):
-    """기능: 기기 클릭 이벤트 기록 및 AI Server로 전송.
+    """기능: 기기 클릭 이벤트를 처리하고 기기 제어.
+    
+    1. Frontend에서 기기 클릭 (user_id, action)
+    2. Backend가 기기 정보 조회
+    3. AI Server로 추천 요청 (선택적)
+    4. 기기 제어 실행
+    5. 추천이 있으면 WebSocket으로 푸시
     
     args: device_id (path), user_id, action (body)
-    return: 성공 여부, device_id, action, 메시지
+    return: 성공 여부, device_id, action, 메시지, recommendation (optional)
     """
     try:
-        user_id = request.user_id
-        action = request.action
+        user_id = request.user_id or "default_user"
+        action = request.action or "toggle"
         
-        if not user_id:
-            logger.warning("Missing user_id in click event")
-            raise HTTPException(status_code=400, detail="user_id is required")
-        
-        if not action:
-            logger.warning("Missing action in click event")
-            raise HTTPException(status_code=400, detail="action is required")
+        logger.info(
+            f"Device click received: device_id={device_id}, "
+            f"user_id={user_id}, action={action}"
+        )
         
         logger.info(
             f"Device click detected: device_id={device_id}, "
@@ -144,13 +159,38 @@ async def handle_device_click(device_id: str, request: DeviceClickRequest):
             f"Device click processed: {device_name} ({device_type}) - {action}"
         )
         
-        return {
-            "success": True,
+        # ✅ AI Server의 LG Control 엔드포인트 호출
+        # POST /api/lg/control → AI-Server → Gateway → LG Device
+        try:
+            control_result = await ai_client.send_device_control(
+                user_id=user_id,
+                device_id=device_id,
+                action=action,
+                params={}
+            )
+            
+            logger.info(f"✅ AI-Server를 통한 기기 제어 성공: {device_name} - {action}")
+            logger.info(f"Control result: {control_result}")
+            
+        except Exception as e:
+            logger.error(f"❌ AI-Server를 통한 기기 제어 실패: {e}", exc_info=True)
+            control_result = {
+                "success": False,
+                "message": f"Device control failed: {str(e)}"
+            }
+        
+        # Frontend 응답 형식에 맞춰 반환
+        response_data = {
+            "success": control_result.get("success", True),
             "device_id": device_id,
             "device_name": device_name,
+            "device_type": device_type,
             "action": action,
-            "message": f"Device click event processed: {device_name} {action}"
+            "message": control_result.get("message", f"Device {action} executed via AI-Server"),
+            "result": {}  # 추천은 별도 WebSocket으로 전달됨
         }
+        
+        return response_data
     
     except HTTPException:
         raise

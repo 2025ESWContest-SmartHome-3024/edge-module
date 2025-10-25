@@ -2,18 +2,24 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
     Power, Wind, Sun, Droplets,
-    Thermometer, Fan, Lightbulb
+    Thermometer, Fan, Lightbulb, Zap
 } from 'lucide-react'
 import './DeviceCard.css'
 
 /**
- * 기기 타입별 아이콘 매핑
+ * 기기 타입별 아이콘 매핑 (MongoDB 필드명)
+ * 
+ * MongoDB device_type:
+ * - "air_purifier" → 공기청정기 (Fan)
+ * - "dryer" → 건조기 (Zap)
+ * - "air_conditioner" → 에어컨 (Wind)
  */
 const DEVICE_ICONS = {
-    air_conditioner: Wind,
-    air_purifier: Fan,
-    light: Lightbulb,
-    thermostat: Thermometer,
+    'air_purifier': Fan,      // 공기청정기 (MongoDB)
+    'airpurifier': Fan,       // 공기청정기 (Frontend 정규화)
+    'dryer': Zap,             // 건조기
+    'air_conditioner': Wind,  // 에어컨 (MongoDB)
+    'aircon': Wind            // 에어컨 (Frontend 정규화)
 }
 
 // 2초 시선 유지 시간 (dwell time)
@@ -224,12 +230,14 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
             console.log(`[DeviceCard] 시선 클릭: ${device.name}`)
 
             // Backend의 POST /api/devices/{device_id}/click 호출
+            // 올바른 요청 형식: { "user_id": "...", "action": "..." }
             // Response: { "success": true, "device_id": "...", "result": { "recommendation": {...} } }
             const response = await fetch(`/api/devices/${device.device_id || device.id}/click`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    command: 'toggle'
+                    user_id: localStorage.getItem('gazehome_user_id') || 'default_user',
+                    action: 'toggle'
                 })
             })
 
@@ -346,6 +354,18 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
                     <div className="metadata-item">
                         <Droplets size={16} />
                         <span>PM2.5: {device.metadata.pm25}μg/m³</span>
+                    </div>
+                )}
+                {device.metadata.time_remaining !== undefined && (
+                    <div className="metadata-item">
+                        <Sun size={16} />
+                        <span>남은시간: {device.metadata.time_remaining}분</span>
+                    </div>
+                )}
+                {device.metadata.temperature !== undefined && (
+                    <div className="metadata-item">
+                        <Thermometer size={16} />
+                        <span>{device.metadata.temperature}°C</span>
                     </div>
                 )}
             </div>

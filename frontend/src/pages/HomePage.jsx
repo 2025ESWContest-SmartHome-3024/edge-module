@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Eye, LogOut, Settings, Sparkles,
-    X, Bell, TrendingUp, User
+    Bell, User
 } from 'lucide-react'
 import GazeCursor from '../components/GazeCursor'
 import DeviceCard from '../components/DeviceCard'
@@ -119,39 +119,55 @@ function HomePage({ onLogout }) {
     }, [])
 
     /**
-     * 스마트홈 기기 목록 로드
+     * 스마트홈 기기 목록 로드 (MongoDB 스키마 호환)
+     * 
+     * Backend 응답 형식:
+     * {
+     *   "success": true,
+     *   "devices": [
+     *     {
+     *       "device_id": "b403_air_purifier_001",
+     *       "device_type": "air_purifier",
+     *       "alias": "거실 공기청정기",
+     *       "supported_actions": ["turn_on", "turn_off", "clean", "auto"],
+     *       "is_active": true
+     *     }
+     *   ],
+     *   "count": 3
+     * }
      */
     const loadDevices = async () => {
         try {
             const response = await fetch('/api/devices/')
             const data = await response.json()
 
-            // Backend 응답 형식: { "success": true, "devices": [...], "count": 3, "source": "ai_server" }
             if (data.success && data.devices) {
-                // 기기 객체 변환: Backend 응답 형식 → Frontend 기대 형식
-                const transformedDevices = data.devices.map((device, index) => {
-                    // metadata.status에서 on/off 상태 추출
-                    const status = device.metadata?.status || 'off'
+                // ✅ MongoDB에서 지원하는 기기 타입
+                const SUPPORTED_TYPES = ['air_purifier', 'airpurifier', 'dryer', 'air_conditioner', 'aircon']
 
-                    return {
-                        id: device.device_id,
-                        name: device.device_name,
-                        type: device.device_type,
-                        room: '거실',  // Backend에서 제공하지 않음
-                        state: status,  // ✅ metadata.status에서 가져옴
-                        metadata: {
-                            current_temp: device.metadata?.current_temp,
-                            target_temp: device.metadata?.target_temp,
-                            mode: device.metadata?.mode,
-                            brightness: device.metadata?.brightness,
-                            speed: device.metadata?.speed,
-                            power: device.metadata?.power,
-                            temp: device.metadata?.temp,
-                            pm25: device.metadata?.pm25,
+                // ✅ MongoDB 필드 → Frontend 형식 변환
+                const transformedDevices = data.devices
+                    .filter(device => SUPPORTED_TYPES.includes(device.device_type))
+                    .map((device, index) => {
+                        // device_type 정규화 (air_purifier/airpurifier → airpurifier)
+                        let normalizedType = device.device_type
+                        if (normalizedType === 'air_purifier') normalizedType = 'airpurifier'
+                        if (normalizedType === 'air_conditioner') normalizedType = 'aircon'
+
+                        return {
+                            id: device.device_id,  // ✅ device_id 사용
+                            device_id: device.device_id,
+                            name: device.alias,  // ✅ alias → 기기 이름
+                            type: normalizedType,
+                            supported_actions: device.supported_actions || [],  // ✅ MongoDB 필드
+                            is_active: device.is_active,
+                            room: '거실',  // 기본값
+                            state: 'off',  // 초기값
+                            metadata: {}
                         }
-                    }
-                })
-                console.log('[HomePage] 기기 목록 로드 성공:', transformedDevices)
+                    })
+
+                console.log('[HomePage] 기기 목록 로드 성공 (MongoDB 동기화):', transformedDevices)
                 setDevices(transformedDevices)
             } else {
                 console.warn('기기 목록 응답 형식 오류:', data)
@@ -221,22 +237,22 @@ function HomePage({ onLogout }) {
                 }
             }
 
-            // MQTT로부터 받은 추천 메시지 처리
+            // 추천 메시지 처리 (WebSocket을 통한 백엔드 푸시)
             if (data.type === 'recommendation') {
-                console.log('[HomePage] MQTT 추천 수신:', data.title)
-                console.log('[HomePage] 추천 내용:', data.content)
+                console.log('[HomePage] 추천 수신:', data.title)
+                console.log('[HomePage] 추천 내용:', data.description)
                 console.log('[HomePage] 추천 시간:', new Date().toLocaleString())
 
                 const recommendation = {
-                    id: `rec_mqtt_${Date.now()}`,
+                    id: `rec_ws_${Date.now()}`,
                     title: data.title,
-                    description: data.content,
-                    device_id: null,
-                    device_name: 'AI 추천',
-                    action: null,
-                    params: {},
-                    reason: data.content,
-                    priority: 3,
+                    description: data.description || data.content,
+                    device_id: data.device_id || null,
+                    device_name: data.device_name || 'AI 추천',
+                    action: data.action || null,
+                    params: data.params || {},
+                    reason: data.reason || data.description || data.content,
+                    priority: data.priority || 3,
                     timestamp: new Date().toISOString()
                 }
 
@@ -249,7 +265,7 @@ function HomePage({ onLogout }) {
                         body: data.title,
                         icon: '/gazehome-icon.png',
                         badge: '/gazehome-badge.png',
-                        tag: 'mqtt-recommendation',
+                        tag: 'ws-recommendation',
                         requireInteraction: true
                     })
                     console.log('[HomePage] 🔔 Browser Notification 발송됨')
@@ -273,7 +289,7 @@ function HomePage({ onLogout }) {
     /**
      * 기기 제어
      * @param {string} deviceId - 기기 ID
-     * @param {string} action - 제어 액션 (toggle, on, off 등)
+     * @param {string} action - 제어 액션 (toggle, turn_on, turn_off 등)
      * @param {Object} params - 추가 파라미터
      */
     const handleDeviceControl = async (deviceId, action, params = {}) => {
@@ -285,14 +301,18 @@ function HomePage({ onLogout }) {
 
         try {
             setControllingDevice(deviceId)
-            console.log('[HomePage] 기기 제어 시작:', deviceId)
+            console.log('[HomePage] 기기 제어 시작:', deviceId, action)
 
             // Backend: POST /api/devices/{device_id}/click
-            // 응답 형식: { "success": true, "device_id": "...", "result": {...} }
+            // 올바른 요청 형식: { "user_id": "...", "action": "..." }
+            // 응답 형식: { "success": true, "device_id": "...", "result": { "recommendation": {...} } }
             const response = await fetch(`/api/devices/${deviceId}/click`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ command: action }),
+                body: JSON.stringify({
+                    user_id: localStorage.getItem('gazehome_user_id') || 'default_user',
+                    action: action || 'toggle'
+                }),
             })
 
             const result = await response.json()
@@ -434,22 +454,16 @@ function HomePage({ onLogout }) {
                         </div>
 
                         <div className="devices-grid">
-                            {devices.map((device, index) => (
-                                <motion.div
+                            {devices.map((device) => (
+                                <DeviceCard
                                     key={device.id}
-                                    initial={{ opacity: 0, y: 20 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    transition={{ delay: 0.1 * index }}
-                                >
-                                    <DeviceCard
-                                        device={device}
-                                        onControl={handleDeviceControl}
-                                        prolongedBlink={prolongedBlink}
-                                        isPointerLocked={isPointerLocked}
-                                        onPointerEnter={lockPointer}
-                                        isControlling={controllingDevice === device.id}
-                                    />
-                                </motion.div>
+                                    device={device}
+                                    onControl={handleDeviceControl}
+                                    prolongedBlink={prolongedBlink}
+                                    isPointerLocked={isPointerLocked}
+                                    onPointerEnter={lockPointer}
+                                    isControlling={controllingDevice === device.id}
+                                />
                             ))}
                         </div>
                     </motion.div>

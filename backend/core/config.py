@@ -64,8 +64,6 @@ class Settings(BaseSettings):
     # ===== 스마트 홈 통합 설정 (선택사항) =====
     home_assistant_url: str = ""
     home_assistant_token: str = ""
-    mqtt_broker: str = ""
-    mqtt_port: int = 1883
     
     @property
     def screen_size(self) -> Tuple[int, int]:

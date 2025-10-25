@@ -24,13 +24,9 @@
     --spacing-xs: 0.25rem;
     --spacing-sm: 0.5rem;
     --spacing-md: 0.75rem;
-    /* 1rem → 0.75rem (공간 효율) */
     --spacing-lg: 1rem;
-    /* 1.5rem → 1rem */
     --spacing-xl: 1.25rem;
-    /* 2rem → 1.25rem */
     --spacing-2xl: 1.5rem;
-    /* 3rem → 1.5rem */
 
     /* Border radius */
     --radius-sm: 0.375rem;
@@ -42,18 +38,13 @@
     /* Shadows - 라즈베리파이 렌더링 최적화 */
     --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
     --shadow-md: 0 2px 4px 0 rgba(0, 0, 0, 0.1);
-    /* 간소화 */
     --shadow-lg: 0 4px 8px 0 rgba(0, 0, 0, 0.1);
-    /* 간소화 */
     --shadow-xl: 0 8px 12px 0 rgba(0, 0, 0, 0.1);
-    /* 간소화 */
 
     /* Transitions - 성능 최적화 */
     --transition-fast: 150ms ease-in-out;
     --transition-base: 200ms ease-in-out;
-    /* 250ms → 200ms (빠른 반응) */
     --transition-slow: 300ms ease-in-out;
-    /* 350ms → 300ms */
 
     /* Fonts - 라즈베리파이 최적화 */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans KR',
@@ -76,14 +67,12 @@ body {
     color: var(--gray-900);
     min-height: 100vh;
     overflow-x: hidden;
-    /* 라즈베리파이 최적화: 하드웨어 가속 */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
 }
 
 #root {
     min-height: 100vh;
-    /* 7inch 디스플레이: 전체 화면 채우기 */
     width: 100%;
     height: 100vh;
     overflow: hidden;
@@ -92,7 +81,6 @@ body {
 /* Scrollbar styling - 터치 인터페이스에 맞게 최적화 */
 ::-webkit-scrollbar {
     width: 12px;
-    /* 더 쉬운 터치 타겟 */
     height: 12px;
 }
 
@@ -133,7 +121,6 @@ a {
 /* Utility classes */
 .container {
     max-width: 800px;
-    /* 7inch 너비 맞춤 */
     margin: 0 auto;
     padding: 0 var(--spacing-md);
 }
@@ -179,7 +166,6 @@ a {
     from {
         opacity: 0;
         transform: translateY(10px);
-        /* 20px → 10px */
     }
 
     to {
@@ -192,7 +178,6 @@ a {
     from {
         opacity: 0;
         transform: translateX(10px);
-        /* 20px → 10px */
     }
 
     to {
@@ -221,12 +206,10 @@ a {
 
 .animate-fadeIn {
     animation: fadeIn 0.4s ease-out;
-    /* 0.5s → 0.4s */
 }
 
 .animate-slideInRight {
     animation: slideInRight 0.3s ease-out;
-    /* 0.4s → 0.3s */
 }
 
 .animate-pulse {
@@ -240,161 +223,7 @@ a {
 /* 7inch 디스플레이 미디어 쿼리 */
 @media (max-width: 800px) {
     :root {
-        /* 작은 화면: 더 작은 여백 */
         --spacing-md: 0.625rem;
         --spacing-lg: 0.875rem;
     }
-}
-
-body {
-    background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-    color: var(--gray-900);
-    min-height: 100vh;
-    overflow-x: hidden;
-}
-
-#root {
-    min-height: 100vh;
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: var(--gray-100);
-}
-
-::-webkit-scrollbar-thumb {
-    background: var(--gray-400);
-    border-radius: var(--radius-full);
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: var(--gray-500);
-}
-
-/* Button reset */
-button {
-    font-family: inherit;
-    cursor: pointer;
-    border: none;
-    background: none;
-}
-
-/* Input reset */
-input,
-textarea,
-select {
-    font-family: inherit;
-}
-
-/* Link reset */
-a {
-    color: inherit;
-    text-decoration: none;
-}
-
-/* Utility classes */
-.container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-lg);
-}
-
-.text-center {
-    text-align: center;
-}
-
-.flex {
-    display: flex;
-}
-
-.flex-col {
-    flex-direction: column;
-}
-
-.items-center {
-    align-items: center;
-}
-
-.justify-center {
-    justify-content: center;
-}
-
-.justify-between {
-    justify-content: space-between;
-}
-
-.gap-sm {
-    gap: var(--spacing-sm);
-}
-
-.gap-md {
-    gap: var(--spacing-md);
-}
-
-.gap-lg {
-    gap: var(--spacing-lg);
-}
-
-/* Animation */
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-@keyframes slideInRight {
-    from {
-        opacity: 0;
-        transform: translateX(20px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateX(0);
-    }
-}
-
-@keyframes pulse {
-
-    0%,
-    100% {
-        opacity: 1;
-    }
-
-    50% {
-        opacity: 0.5;
-    }
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.animate-fadeIn {
-    animation: fadeIn 0.5s ease-out;
-}
-
-.animate-slideInRight {
-    animation: slideInRight 0.4s ease-out;
-}
-
-.animate-pulse {
-    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-.animate-spin {
-    animation: spin 1s linear infinite;
 }

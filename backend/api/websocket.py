@@ -8,8 +8,6 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from backend.core.gaze_tracker import WebGazeTracker
-from backend.services.mqtt_client import mqtt_client
-from backend.api import recommendations
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -29,7 +27,7 @@ class ConnectionManager:
         """
         await websocket.accept()
         self.active_connections.append(websocket)
-        print(f"[WebSocket] 클라이언트 연결됨. 총 연결 수: {len(self.active_connections)}")
+        logger.info(f"[WebSocket] 클라이언트 연결됨. 총 연결 수: {len(self.active_connections)}")
     
     def disconnect(self, websocket: WebSocket):
         """기능: WebSocket 연결 해제.
@@ -37,8 +35,9 @@ class ConnectionManager:
         args: websocket
         return: 없음
         """
-        self.active_connections.remove(websocket)
-        print(f"[WebSocket] 클라이언트 연결 해제됨. 총 연결 수: {len(self.active_connections)}")
+        if websocket in self.active_connections:
+            self.active_connections.remove(websocket)
+        logger.info(f"[WebSocket] 클라이언트 연결 해제됨. 총 연결 수: {len(self.active_connections)}")
     
     async def broadcast(self, message: dict):
         """기능: 모든 클라이언트에 메시지 전송.
@@ -51,7 +50,7 @@ class ConnectionManager:
             try:
                 await connection.send_json(message)
             except Exception as e:
-                print(f"[WebSocket] 클라이언트에 전송 오류: {e}")
+                logger.warning(f"[WebSocket] 클라이언트에 전송 오류: {e}")
                 disconnected.append(connection)
         
         # 연결 해제된 클라이언트 정리
@@ -66,10 +65,14 @@ manager = ConnectionManager()
 
 @router.websocket("/gaze")
 async def websocket_gaze(websocket: WebSocket):
-    """기능: 실시간 시선 스트리밍.
+    """기능: 실시간 시선 스트리밍 및 추천 푸시.
     
     args: websocket
     return: 없음 (연속 스트림)
+    
+    메시지 타입:
+    1. gaze_update: 시선 위치 업데이트
+    2. recommendation: 추천 메시지 (Backend → Frontend)
     """
     await manager.connect(websocket)
     
@@ -123,7 +126,7 @@ async def websocket_gaze(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
     except Exception as e:
-        print(f"[WebSocket] 시선 스트림 오류: {e}")
+        logger.error(f"[WebSocket] 시선 스트림 오류: {e}")
         manager.disconnect(websocket)
         try:
             await websocket.close()
@@ -209,9 +212,9 @@ async def websocket_control(websocket: WebSocket):
                 })
     
     except WebSocketDisconnect:
-        print("[WebSocket] 제어 클라이언트 연결 해제됨")
+        logger.info("[WebSocket] 제어 클라이언트 연결 해제됨")
     except Exception as e:
-        print(f"[WebSocket] 제어 소켓 오류: {e}")
+        logger.error(f"[WebSocket] 제어 소켓 오류: {e}")
         try:
             await websocket.close()
         except:
@@ -238,7 +241,7 @@ async def websocket_features(websocket: WebSocket):
             await websocket.close()
             return
         
-        print("[WebSocket] 캘리브레이션용 특징 스트림 연결됨")
+        logger.info("[WebSocket] 캘리브레이션용 특징 스트림 연결됨")
         
         # 캘리브레이션을 위해 낮은 속도로 특징 스트리밍
         last_sent_time = 0
@@ -273,9 +276,9 @@ async def websocket_features(websocket: WebSocket):
             await asyncio.sleep(0.01)
             
     except WebSocketDisconnect:
-        print("[WebSocket] 특징 스트림 연결 해제됨")
+        logger.info("[WebSocket] 특징 스트림 연결 해제됨")
     except Exception as e:
-        print(f"[WebSocket] 특징 스트림 오류: {e}")
+        logger.error(f"[WebSocket] 특징 스트림 오류: {e}")
         try:
             await websocket.close()
         except:

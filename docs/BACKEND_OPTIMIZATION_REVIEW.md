@@ -5,7 +5,6 @@
 - `backend/core/gaze_tracker.py`
 - `backend/api/main.py`
 - `backend/api/websocket.py`
-- `backend/services/mqtt_client.py`
 - `backend/services/ai_client.py`
 - `backend/run.py`
 
@@ -205,70 +204,7 @@ class AIServiceClient:
 
 ---
 
-### 4️⃣ **MQTT 연결 안정성 개선**
-
-#### 파일: `backend/services/mqtt_client.py`
-
-**현재 코드 (L39-49)**:
-```python
-# 연결 대기 (최대 5초)
-for _ in range(50):
-    if self.is_connected:
-        logger.info("Connected to MQTT broker")
-        return True
-    asyncio.sleep(0.1)  # ⚠️ asyncio.sleep 없음!
-
-logger.warning("MQTT connection timeout")
-return False
-```
-
-**문제점**:
-- `asyncio.sleep()` 호출 없음 (동기 코드 오류)
-- 1초 타임아웃 효과 없음 → 5초 낭비
-- 라즈베리파이 시작 시간 증가
-
-**최적화 권장사항**:
-```python
-async def connect(self) -> bool:
-    """라즈베리파이 최적화: 빠른 MQTT 연결"""
-    if not self.broker:
-        logger.warning("MQTT broker not configured, skipping connection")
-        return False
-    
-    try:
-        self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1)
-        self.client.on_connect = self._on_connect
-        self.client.on_disconnect = self._on_disconnect
-        self.client.on_message = self._on_message
-        
-        logger.info(f"Connecting to MQTT broker: {self.broker}:{self.port}")
-        self.client.connect(self.broker, self.port, keepalive=60)
-        self.client.loop_start()
-        
-        # 연결 대기 (최대 2초, 라즈베리파이 최적화)
-        import time
-        start_time = time.time()
-        while time.time() - start_time < 2:
-            if self.is_connected:
-                logger.info("Connected to MQTT broker")
-                return True
-            await asyncio.sleep(0.05)  # 50ms 간격으로 확인
-        
-        logger.warning(f"MQTT connection timeout (broker: {self.broker})")
-        return False
-        
-    except Exception as e:
-        logger.error(f"Failed to connect to MQTT broker: {e}")
-        return False
-```
-
-**개선 효과**:
-- 시작 시간: 5초 → 2초 ⬇️ (라즈베리파이 부팅 시간 단축)
-- 메모리: sleep 루프 CPU 사이클 제거
-
----
-
-### 5️⃣ **로깅 성능 최적화**
+### 4️⃣ **로깅 성능 최적화**
 
 #### 파일: `backend/api/main.py`, `backend/api/websocket.py`
 
@@ -319,7 +255,7 @@ class Settings(BaseSettings):
 
 ---
 
-### 6️⃣ **카메라 버퍼 최적화**
+### 5️⃣ **카메라 버퍼 최적화**
 
 #### 파일: `backend/core/gaze_tracker.py`
 
@@ -364,7 +300,7 @@ async def initialize(self):
 
 ---
 
-### 7️⃣ **Uvicorn 워커 최적화**
+### 6️⃣ **Uvicorn 워커 최적화**
 
 #### 파일: `backend/run.py`
 

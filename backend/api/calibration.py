@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import List, Tuple, Optional
 from enum import Enum
@@ -13,7 +14,7 @@ from pydantic import BaseModel, Field
 from backend.core.config import settings
 from backend.core.database import db
 
-
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -251,7 +252,7 @@ async def start_calibration(request: CalibrationStartRequest):
         for key in oldest_keys:
             del calibration_sessions[key]
     
-    print(f"[Calibration] Started session {session_id} with {len(session.points)} points")
+    logger.info(f"[Calibration] 세션 {session_id} 시작: {len(session.points)}개 포인트")
     
     return CalibrationStartResponse(
         session_id=session_id,
@@ -304,7 +305,7 @@ async def collect_calibration_data(request: CalibrationCollectRequest):
     session.status = CalibrationStatus.CAPTURING
     session.message = f"포인트 {current_point.index + 1}에서 {session.features_collected}개 샘플 수집됨"
     
-    print(f"[Calibration] 세션 {request.session_id}: 포인트 ({request.point_x}, {request.point_y})에 대한 샘플 수집됨")
+    logger.info(f"[Calibration] 세션 {request.session_id}: 포인트 ({request.point_x}, {request.point_y})에 대한 샘플 수집됨")
     
     return {
         "success": True,
@@ -335,11 +336,11 @@ async def next_calibration_point(request: CalibrationNextPointRequest):
         current = session.get_current_point()
         session.status = CalibrationStatus.PULSING
         session.message = f"포인트 {current.index + 1}/{len(session.points)}로 이동 중"
-        print(f"[Calibration] 세션 {session_id}: 포인트 {current.index + 1}로 이동")
+        logger.info(f"[Calibration] 세션 {session_id}: 포인트 {current.index + 1}로 이동")
     else:
         session.status = CalibrationStatus.COMPLETED
         session.message = "모든 포인트 수집됨. 훈련 준비 완료."
-        print(f"[Calibration] 세션 {session_id}: 모든 포인트 수집됨")
+        logger.info(f"[Calibration] 세션 {session_id}: 모든 포인트 수집됨")
     
     return {
         "success": True,
@@ -393,7 +394,7 @@ async def complete_calibration(request: CalibrationCompleteRequest):
         features_array = np.array(session.collected_features)
         targets_array = np.array(session.collected_targets)
         
-        print(f"[Calibration] {len(features_array)}개 샘플로 Ridge 모델 훈련 중...")
+        logger.info(f"[Calibration] {len(features_array)}개 샘플로 Ridge 모델 훈련 중...")
         
         # 모델 훈련 (Ridge 회귀)
         gaze_tracker.gaze_estimator.train(features_array, targets_array)
@@ -413,20 +414,16 @@ async def complete_calibration(request: CalibrationCompleteRequest):
         
         # 데이터베이스에 캘리브레이션 기록
         db.add_calibration(
-            username=username,
             calibration_file=f"{username}.pkl",
-            screen_width=session.screen_width,
-            screen_height=session.screen_height,
-            method=session.method.value,
-            samples_count=len(session.collected_features)
+            method=session.method.value
         )
         
         session.status = CalibrationStatus.COMPLETED
         session.message = "캘리브레이션 완료됨"
         
-        print(f"[Calibration] 세션 {request.session_id}: Ridge 모델 훈련 완료")
-        print(f"[Calibration] 저장 위치: {save_path}")
-        print(f"[Calibration] 사용자 {username}를 위해 데이터베이스에 기록됨")
+        logger.info(f"[Calibration] 세션 {request.session_id}: Ridge 모델 훈련 완료")
+        logger.info(f"[Calibration] 저장 위치: {save_path}")
+        logger.info(f"[Calibration] 사용자 {username}를 위해 데이터베이스에 기록됨")
         
         return CalibrationCompleteResponse(
             success=True,
@@ -438,7 +435,7 @@ async def complete_calibration(request: CalibrationCompleteRequest):
     except Exception as e:
         session.status = CalibrationStatus.ERROR
         session.message = f"훈련 실패: {str(e)}"
-        print(f"[Calibration] 세션 {request.session_id}: 훈련 실패 - {e}")
+        logger.error(f"[Calibration] 세션 {request.session_id}: 훈련 실패 - {e}", exc_info=True)
         
         return CalibrationCompleteResponse(
             success=False,

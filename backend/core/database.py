@@ -2,11 +2,15 @@
 from __future__ import annotations
 
 import sqlite3
+import logging
 from pathlib import Path
 from typing import Optional, List, Dict
+from datetime import datetime
 import json
 
 from backend.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class Database:
@@ -59,22 +63,24 @@ class Database:
                 )
             """)
             
-            # ✅ 기기 테이블 (간소화: capabilities만 JSON)
+            # ✅ 기기 테이블 (MongoDB 스키마 동기화)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS devices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL,
-                    device_id TEXT NOT NULL,
-                    device_name TEXT NOT NULL,
+                    user_id TEXT NOT NULL,
+                    device_id TEXT NOT NULL UNIQUE,
                     device_type TEXT,
-                    capabilities TEXT,
-                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    alias TEXT NOT NULL,
+                    supported_actions TEXT,
+                    is_active BOOLEAN DEFAULT 1,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                     UNIQUE(user_id, device_id)
                 )
             """)
             
             conn.commit()
-            print(f"[Database] 초기화됨: {self.db_path}")
+            logger.info(f"[Database] 초기화됨: {self.db_path}")
             
             # 데모 사용자 생성
             self._init_demo_user()
@@ -98,7 +104,7 @@ class Database:
                     (self.DEFAULT_USERNAME,)
                 )
                 conn.commit()
-                print(f"[Database] 데모 사용자 생성: {self.DEFAULT_USERNAME}")
+                logger.info(f"[Database] 데모 사용자 생성: {self.DEFAULT_USERNAME}")
     
     def get_demo_user_id(self) -> int:
         """기능: 데모 사용자 ID 조회.
@@ -145,7 +151,7 @@ class Database:
                 (user_id, calibration_file, method)
             )
             conn.commit()
-            print(f"[Database] 캘리브레이션 저장됨: {calibration_file}")
+            logger.info(f"[Database] 캘리브레이션 저장됨: {calibration_file}")
     
     def get_calibrations(self) -> List[Dict]:
         """기능: 캘리브레이션 목록 조회.
@@ -195,45 +201,69 @@ class Database:
     # =========================================================================
     
     def sync_devices(self, devices: List[Dict]):
-        """기능: 기기 목록 동기화.
+        """기능: 기기 목록 동기화 (MongoDB와 동일한 필드명 사용).
+        
+        AI-Services MongoDB의 user_devices 컬렉션과 동일하게 동기화합니다.
         
         args: devices (AI Server에서 가져온 기기 목록)
+              예: [
+                    {
+                      "device_id": "b403_air_purifier_001",
+                      "device_type": "air_purifier",
+                      "alias": "거실 공기청정기",
+                      "supported_actions": ["turn_on", "turn_off", "clean", "auto"],
+                      "is_active": true
+                    }
+                  ]
         return: 없음
         """
-        user_id = self.get_demo_user_id()
+        # MongoDB의 user_id와 동일하게 사용 (문자열)
+        user_id = "default_user"
         
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             
             for device in devices:
-                capabilities_json = json.dumps(device.get("capabilities", []))
+                # ✅ MongoDB supported_actions → JSON 문자열 변환
+                supported_actions_json = json.dumps(device.get("supported_actions", []))
                 
                 cursor.execute(
                     """
                     INSERT OR REPLACE INTO devices 
-                    (user_id, device_id, device_name, device_type, capabilities)
-                    VALUES (?, ?, ?, ?, ?)
+                    (user_id, device_id, device_type, alias, supported_actions, is_active, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        user_id,
+                        user_id,  # ✅ 문자열 "default_user"
                         device.get("device_id"),
-                        device.get("device_name"),
                         device.get("device_type"),
-                        capabilities_json
+                        device.get("alias"),  # ✅ device_name → alias (MongoDB 필드명)
+                        supported_actions_json,  # ✅ capabilities → supported_actions (MongoDB 필드명)
+                        device.get("is_active", True),  # ✅ is_active 필드 추가
+                        datetime.utcnow().isoformat()  # ✅ 동기화 시간 기록
                     )
                 )
             
             conn.commit()
-            print(f"[Database] {len(devices)}개 기기 동기화됨")
+            logger.info(f"[Database] {len(devices)}개 기기 동기화됨 (MongoDB 스키마)")
     
     def get_devices(self) -> List[Dict]:
-        """기능: 기기 목록 조회.
+        """기능: 기기 목록 조회 (MongoDB 스키마 호환).
         
         args: 없음
-        return: 기기 목록
+        return: 기기 목록 (MongoDB 필드명 사용)
+                예: [
+                      {
+                        "id": 1,
+                        "user_id": "default_user",
+                        "device_id": "b403_air_purifier_001",
+                        "device_type": "air_purifier",
+                        "alias": "거실 공기청정기",
+                        "supported_actions": ["turn_on", "turn_off", "clean", "auto"],
+                        "is_active": True
+                      }
+                    ]
         """
-        user_id = self.get_demo_user_id()
-        
         with sqlite3.connect(self.db_path) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
@@ -241,21 +271,22 @@ class Database:
             cursor.execute(
                 """
                 SELECT * FROM devices
-                WHERE user_id = ?
+                WHERE is_active = 1
                 ORDER BY id DESC
-                """,
-                (user_id,)
+                """
             )
             
             devices = []
             for row in cursor.fetchall():
                 device = dict(row)
                 try:
-                    device["capabilities"] = json.loads(device.get("capabilities", "[]"))
-                except:
-                    device["capabilities"] = []
+                    # ✅ supported_actions JSON 파싱
+                    device["supported_actions"] = json.loads(device.get("supported_actions", "[]"))
+                except (json.JSONDecodeError, TypeError):
+                    device["supported_actions"] = []
                 devices.append(device)
             
+            logger.info(f"[Database] {len(devices)}개 활성 기기 조회됨")
             return devices
 
 

@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { X, Sparkles, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react'
+import { Sparkles, AlertCircle, CheckCircle, TrendingUp } from 'lucide-react'
 import './RecommendationModal.css'
 
 /**
@@ -48,6 +48,12 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     // 최상위 추천 (우선순위 최고)
     const topRecommendation = recommendations[0]
 
+    // 추천 목록 메모이제이션 - 불필요한 배열 생성 방지
+    const otherRecommendations = useMemo(
+        () => recommendations.slice(1, 4),
+        [recommendations]
+    )
+
     if (!topRecommendation) return null
 
     // 우선순위에 맞는 색상 스타일 가져오기
@@ -57,10 +63,10 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     /**
      * 버튼 클릭 핸들러
      * - 포인터 고정 시작
-     * - 피드백 전송
+     * - 피드백 전송 (HTTP POST)
      * - 콜백 실행
      */
-    const handleButtonClick = async (callback, confirm = true) => {
+    const handleButtonClick = async (callback, accepted = true) => {
         // 포인터 고정 시작
         console.log(`[RecommendationModal] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
         setIsLocked(true)
@@ -76,24 +82,20 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             setIsLocked(false)
         }, LOCK_DURATION)
 
-        // MQTT 추천인 경우만 피드백 전송 (device_id가 없음)
-        if (topRecommendation.id.startsWith('rec_mqtt')) {
-            try {
-                await fetch('/api/recommendations/feedback', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        title: topRecommendation.title,
-                        confirm: confirm
-                    }),
-                })
-                console.log(`[RecommendationModal] MQTT 피드백 전송: ${confirm ? 'YES' : 'NO'}`)
-            } catch (error) {
-                console.error('[RecommendationModal] 피드백 전송 실패:', error)
-            }
-        } else {
-            // 일반 추천 (device click)은 피드백 없음
-            console.log(`[RecommendationModal] 일반 추천 (device click) - 피드백 생략`)
+        // 모든 추천에 대해 피드백 전송 (HTTP POST)
+        try {
+            await fetch('/api/recommendations/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    recommendation_id: topRecommendation.id,
+                    user_id: localStorage.getItem('gazehome_user_id') || 'user_1',
+                    accepted: accepted
+                }),
+            })
+            console.log(`[RecommendationModal] 피드백 전송 완료: ${accepted ? 'YES' : 'NO'}`)
+        } catch (error) {
+            console.error('[RecommendationModal] 피드백 전송 실패:', error)
         }
 
         // 콜백 실행
@@ -153,7 +155,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-        // MQTT 팝업 - 오버레이 클릭 시 닫지 않음
+        // 모달 팝업 - 오버레이 클릭 시 닫지 않음
         >
             <motion.div
                 className="recommendation-modal"
@@ -168,7 +170,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                         <Sparkles size={24} className="title-icon" />
                         <h2>🔔 AI 추천</h2>
                     </div>
-                    {/* close 버튼 제거 - MQTT 팝업은 영구 표시 */}
+                    {/* 닫기 버튼 제거 - 추천 팝업은 사용자가 선택할 때까지 표시 */}
                 </div>
 
                 {/* 주요 추천 사항 */}
@@ -222,29 +224,32 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             <CheckCircle size={20} />
                             👍 수락
                         </button>
-                        {/* 👎 거절 버튼 제거 - MQTT 팝업은 항상 표시 */}
+                        {/* 거절 버튼은 선택적 - 현재는 수락만 표시 */}
                     </div>
                 </div>
 
                 {/* 추가 추천 목록 */}
-                {recommendations.length > 1 && (
+                {otherRecommendations.length > 0 && (
                     <div className="other-recommendations">
                         <div className="other-header">
-                            <span>다른 추천 {recommendations.length - 1}개</span>
+                            <span>다른 추천 {otherRecommendations.length}개</span>
                         </div>
                         <div className="other-list">
                             {/* 최대 3개의 추가 추천 표시 */}
-                            {recommendations.slice(1, 4).map((rec) => {
+                            {otherRecommendations.map((rec) => {
                                 const style = PRIORITY_COLORS[rec.priority] || PRIORITY_COLORS[3]
                                 const Icon = style.icon
 
                                 return (
-                                    <motion.div
+                                    <div
                                         key={rec.id}
                                         className="other-item"
-                                        whileHover={{ x: 4 }}
-                                        onClick={() => handleButtonClick(() => onAccept(rec))}
-                                        style={{ cursor: isLocked ? 'not-allowed' : 'pointer', opacity: isLocked ? 0.6 : 1 }}
+                                        onClick={() => handleButtonClick(() => onAccept(rec), true)}
+                                        style={{
+                                            cursor: isLocked ? 'not-allowed' : 'pointer',
+                                            opacity: isLocked ? 0.6 : 1,
+                                            transition: 'opacity 0.2s ease-out'
+                                        }}
                                     >
                                         <div
                                             className="other-icon"
@@ -259,7 +264,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                                             <div className="other-title">{rec.title}</div>
                                             <div className="other-device">{rec.device_name}</div>
                                         </div>
-                                    </motion.div>
+                                    </div>
                                 )
                             })}
                         </div>

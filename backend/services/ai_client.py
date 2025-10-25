@@ -43,17 +43,15 @@ class AIServiceClient:
         """
         url = f"{self.base_url}/api/lg/control"
         
+        # AI Service의 /api/lg/control 엔드포인트 기대 형식
         payload = {
-            "user_id": user_id,
             "device_id": device_id,
-            "action": action,
-            "params": params or {},
-            "timestamp": datetime.now(KST).isoformat()
+            "action": action
         }
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"Send device control: {device_id}, action: {action}")
+                logger.info(f"Send device control: device_id={device_id}, action={action}")
                 
                 response = await client.post(
                     url,
@@ -166,6 +164,63 @@ class AIServiceClient:
             return {
                 "success": False,
                 "message": f"User registration failed: {str(e)}"
+            }
+    
+    # =========================================================================
+    # AI Recommendation
+    # =========================================================================
+    
+    async def send_recommendation(
+        self,
+        title: str,
+        contents: str
+    ) -> Dict[str, Any]:
+        """기능: AI 추천을 하드웨어(Frontend)에 전송.
+        
+        AI Service가 생성한 추천을 사용자에게 보여주고 확인 대기.
+        사용자가 YES 선택시 기기 제어 정보 포함.
+        
+        args: title (추천 제목), contents (추천 내용)
+        return: 응답 (message, confirm: YES/NO, device_control)
+        """
+        url = f"{self.base_url}/api/recommendations"
+        
+        payload = {
+            "title": title,
+            "contents": contents
+        }
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                logger.info(f"Send recommendation: title={title}")
+                
+                response = await client.post(
+                    url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                response.raise_for_status()
+                
+                result = response.json()
+                
+                # 응답 형식 검증
+                confirm = result.get("confirm", "NO")
+                device_control = result.get("device_control")
+                
+                logger.info(f"Recommendation response: confirm={confirm}")
+                
+                if confirm == "YES" and device_control:
+                    logger.info(f"User confirmed recommendation, device_control: {device_control}")
+                
+                return result
+                
+        except Exception as e:
+            logger.error(f"Failed to send recommendation: {e}")
+            return {
+                "success": False,
+                "message": f"Failed to send recommendation: {str(e)}",
+                "confirm": "NO"
             }
     
     # =========================================================================

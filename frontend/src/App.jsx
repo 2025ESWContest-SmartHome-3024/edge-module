@@ -4,7 +4,6 @@ import OnboardingPage from './pages/OnboardingPage'
 import HomePage from './pages/HomePage'
 import CalibrationPage from './pages/CalibrationPage'
 import SettingsPage from './pages/SettingsPage'
-import { mqttMonitor } from './utils/mqttMonitor'
 
 /**
  * 메인 애플리케이션 컴인터
@@ -26,9 +25,8 @@ function App() {
      * - 보정 완료: 자동 홈 화면
      */
     useEffect(() => {
-        // 개발자 도구에서 MQTT 모니터링 사용 가능하도록 설정
-        console.log('%c💡 개발자 모드 활성화', 'background: blue; color: white; padding: 5px 10px; font-weight: bold')
-        console.log('%c🔔 MQTT 모니터링을 시작하려면 콘솔에 입력: window.mqttMonitor.start()', 'color: green; font-weight: bold')
+        // 개발자 도구: 디버그 정보
+        console.log('%c💡 GazeHome 애플리케이션 시작', 'background: blue; color: white; padding: 5px 10px; font-weight: bold')
 
         // localStorage에서 로그인 정보 확인
         const loggedIn = localStorage.getItem('gazehome_logged_in') === 'true'
