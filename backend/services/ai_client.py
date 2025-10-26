@@ -38,21 +38,34 @@ class AIServiceClient:
     ) -> Dict[str, Any]:
         """기능: 기기 제어 명령을 AI Server로 전송.
         
+        AI Server의 /api/lg/control 엔드포인트 호출
+        → Gateway의 /api/lg/control 호출
+        → LG ThinQ API 제어
+        
         args: user_id, device_id, action, params
-        return: 제어 결과 (success, message, device_id, action)
+        return: 제어 결과 (message)
+        
+        응답 형식:
+        {
+            "message": "[GATEWAY] 스마트 기기(공기청정기) 제어 완료"
+        }
         """
         url = f"{self.base_url}/api/lg/control"
         
-        # AI Service의 /api/lg/control 엔드포인트 기대 형식
+        # AI-Services의 /api/lg/control 엔드포인트 요청 형식
+        # (Gateway와 동일한 형식)
         payload = {
             "device_id": device_id,
             "action": action
         }
         
         try:
+            logger.info(f"🚀 AI Server로 기기 제어 요청:")
+            logger.info(f"  - URL: {url}")
+            logger.info(f"  - 기기: {device_id}")
+            logger.info(f"  - 액션: {action}")
+            
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"Send device control: device_id={device_id}, action={action}")
-                
                 response = await client.post(
                     url,
                     json=payload,
@@ -62,15 +75,41 @@ class AIServiceClient:
                 response.raise_for_status()
                 
                 result = response.json()
-                logger.info(f"Device control success: {device_id}, action: {action}")
+                message = result.get("message", "기기 제어 완료")
                 
-                return result
+                logger.info(f"✅ 기기 제어 성공: {message}")
+                logger.info(f"   AI-Server → Gateway → LG Device 제어 완료")
                 
-        except Exception as e:
-            logger.error(f"Device control failed: {e}")
+                return {
+                    "success": True,
+                    "message": message,
+                    "device_id": device_id,
+                    "action": action
+                }
+                
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ AI Server 기기 제어 실패:")
+            logger.error(f"   Status: {e.response.status_code}")
+            logger.error(f"   Detail: {e.response.text}")
             return {
                 "success": False,
-                "message": f"Device control failed: {str(e)}",
+                "message": f"기기 제어 실패: {e.response.text}",
+                "device_id": device_id,
+                "action": action
+            }
+        except httpx.TimeoutException:
+            logger.error(f"❌ AI Server 통신 타임아웃: {device_id}")
+            return {
+                "success": False,
+                "message": f"AI Server 통신 타임아웃 ({self.timeout}초)",
+                "device_id": device_id,
+                "action": action
+            }
+        except Exception as e:
+            logger.error(f"❌ 기기 제어 중 오류: {e}")
+            return {
+                "success": False,
+                "message": f"기기 제어 실패: {str(e)}",
                 "device_id": device_id,
                 "action": action
             }
@@ -80,20 +119,26 @@ class AIServiceClient:
     # =========================================================================
     
     async def get_user_devices(self, user_id: str) -> list[Dict[str, Any]]:
-        """기능: 사용자의 기기 목록을 AI Server에서 조회.
+        """기능: AI Server를 통해 Gateway의 기기 목록을 조회.
+        
+        AI Server의 /api/lg/devices 엔드포인트를 통해
+        Gateway의 LG 기기 목록을 조회합니다.
         
         args: user_id
         return: 기기 목록 (LG Gateway 형식)
         """
-        url = f"{self.base_url}/api/gaze/devices"
+        # AI-Services에서 Gateway를 통해 기기를 조회
+        # /api/lg/devices 엔드포인트 사용
+        url = f"{self.base_url}/api/lg/devices"
         
         try:
+            logger.info(f"🔍 AI Server를 통해 기기 목록 조회:")
+            logger.info(f"  - URL: {url}")
+            logger.info(f"  - 사용자: {user_id}")
+            
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"Get user devices: user_id={user_id}")
-                
                 response = await client.get(
                     url,
-                    params={"user_id": user_id},
                     headers={"Content-Type": "application/json"}
                 )
                 
@@ -101,21 +146,34 @@ class AIServiceClient:
                 
                 result = response.json()
                 
+                # AI Server의 응답 형식: { "response": [...] } 또는 [...]
                 devices = []
                 
-                if isinstance(result, dict) and "devices" in result:
+                if isinstance(result, dict) and "response" in result:
+                    # AI-Services → Gateway 응답 형식
+                    devices = result.get("response", [])
+                elif isinstance(result, dict) and "devices" in result:
+                    # 호환성 형식
                     devices = result.get("devices", [])
-                
                 elif isinstance(result, list):
+                    # 직접 배열 형식
                     devices = result
-                    logger.warning("AI Server returned array directly (recommended: {\"devices\": [...]} format)")
+                    logger.warning("⚠️  AI Server가 직접 배열 형식 반환 (권장: {\"response\": [...]} 형식)")
                 
-                logger.info(f"Fetched {len(devices)} devices from AI Server")
+                logger.info(f"✅ AI Server에서 {len(devices)}개 기기 조회 완료")
                 
                 return devices
                 
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ AI Server 기기 조회 실패:")
+            logger.error(f"   Status: {e.response.status_code}")
+            logger.error(f"   Detail: {e.response.text}")
+            return []
+        except httpx.TimeoutException:
+            logger.error(f"❌ AI Server 통신 타임아웃: {user_id}")
+            return []
         except Exception as e:
-            logger.warning(f"Failed to get user devices: {e}")
+            logger.error(f"❌ 기기 조회 중 오류: {e}")
             return []
     
     # =========================================================================

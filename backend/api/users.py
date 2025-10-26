@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+class LoginRequest(BaseModel):
+    """사용자 로그인 요청."""
+    pass  # 데모 모드: 추가 데이터 없음
+
+
 class LoginResponse(BaseModel):
     """사용자 로그인 응답."""
     success: bool
@@ -21,7 +26,7 @@ class LoginResponse(BaseModel):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login_user():
+async def login_user(request: LoginRequest = None):
     """기능: 데모 사용자 로그인.
     
     args: 없음
