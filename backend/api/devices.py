@@ -324,5 +324,147 @@ async def get_device_detail(device_id: str):
         }
 
 
+# ===============================================================================
+# 📋 기기 프로필 조회 엔드포인트 (사용 가능한 액션)
+# ===============================================================================
+
+@router.get("/{device_id}/profile")
+async def get_device_profile(device_id: str):
+    """기능: 특정 기기의 프로필 조회 (사용 가능한 모든 액션).
+    
+    Gateway의 /api/lg/devices/{deviceId}/profile에서 조회한 정보를 DB에서 반환합니다.
+    
+    Args:
+        device_id: 기기 ID
+    
+    Returns:
+        {
+            "success": true,
+            "device_id": "1d7c7408...",
+            "name": "거실 공기청정기",
+            "device_type": "air_purifier",
+            "actions": [
+                {
+                    "id": 1,
+                    "action_type": "operation",
+                    "action_name": "POWER_ON",
+                    "readable": true,
+                    "writable": true,
+                    "value_type": "enum",
+                    "value_range": "[\"POWER_ON\", \"POWER_OFF\"]"
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        logger.info(f"📋 기기 프로필 조회: {device_id}")
+        
+        device = db.get_device_by_id(device_id)
+        if not device:
+            logger.warning(f"⚠️  기기를 찾을 수 없습니다: {device_id}")
+            raise HTTPException(status_code=404, detail="기기를 찾을 수 없습니다")
+        
+        # DB에서 액션 조회
+        actions = db.get_device_actions(device_id)
+        
+        logger.info(f"✅ 프로필 조회 성공: {len(actions)}개 액션")
+        
+        return {
+            "success": True,
+            "device_id": device_id,
+            "name": device.get("alias"),
+            "device_type": device.get("device_type"),
+            "actions": actions
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 프로필 조회 중 오류: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"오류: {str(e)}"
+        }
+
+
+# ===============================================================================
+# 📊 기기 상태 조회 엔드포인트
+# ===============================================================================
+
+@router.get("/{device_id}/state")
+async def get_device_state(device_id: str):
+    """기능: 특정 기기의 실시간 상태 조회.
+    
+    Gateway를 통해 LG API에서 기기의 현재 상태를 조회합니다.
+    
+    Args:
+        device_id: 기기 ID
+    
+    Returns:
+        {
+            "success": true,
+            "device_id": "1d7c7408...",
+            "name": "거실 에어컨",
+            "device_type": "air_conditioner",
+            "state": {
+                "device_id": "1d7c7408...",
+                "type": "aircon",
+                "power": "POWER_OFF",
+                "mode": "COOL",
+                "current_temp": 22,
+                "target_temp": 25,
+                "wind_strength": "MID"
+            },
+            "timestamp": "2025-10-27T22:30:45.123456"
+        }
+    """
+    try:
+        logger.info(f"📊 기기 상태 조회: {device_id}")
+        
+        # DB에서 기기 확인
+        device = db.get_device_by_id(device_id)
+        if not device:
+            logger.warning(f"⚠️  기기를 찾을 수 없습니다: {device_id}")
+            raise HTTPException(status_code=404, detail="기기를 찾을 수 없습니다")
+        
+        # Gateway를 통해 LG API에서 실시간 상태 조회
+        from backend.services.gateway_client import gateway_client
+        
+        state_response = await gateway_client.get_device_state(device_id)
+        
+        if not state_response or "error" in state_response:
+            logger.warning(f"⚠️  Gateway에서 상태 조회 실패: {state_response}")
+            return {
+                "success": False,
+                "device_id": device_id,
+                "message": "Gateway에서 상태를 조회할 수 없습니다",
+                "error": state_response.get("error") if isinstance(state_response, dict) else str(state_response)
+            }
+        
+        # 응답 구조 정규화
+        state_data = state_response
+        
+        logger.info(f"✅ 상태 조회 성공")
+        
+        return {
+            "success": True,
+            "device_id": device_id,
+            "name": device.get("alias"),
+            "device_type": device.get("device_type"),
+            "state": state_data,
+            "timestamp": datetime.now().isoformat()
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 상태 조회 중 오류: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"오류: {str(e)}"
+        }
+
+
 from datetime import datetime
 

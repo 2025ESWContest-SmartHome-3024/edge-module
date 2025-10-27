@@ -308,6 +308,7 @@ async def get_recommendation_response(recommendation_id: str):
         
         logger.info(f"[Recommendations] 🔍 응답 상태 조회: {recommendation_id} → {status}")
         
+        
         return {
             "success": True,
             "recommendation_id": recommendation_id,
@@ -322,4 +323,88 @@ async def get_recommendation_response(recommendation_id: str):
             status_code=500,
             detail=f"응답 조회 실패: {str(e)}"
         )
+
+
+# ============================================================================
+# 사용자 응답 확인 엔드포인트 (AI-Server와의 통신)
+# ============================================================================
+
+class RecommendationConfirmRequest(BaseModel):
+    """사용자 YES/NO 응답을 AI-Server로 전송하는 요청."""
+    recommendation_id: str = Field(..., description="추천 ID")
+    confirm: str = Field(..., description="YES 또는 NO")
+
+
+@router.post("/confirm")
+async def confirm_recommendation(request: RecommendationConfirmRequest):
+    """사용자 응답(YES/NO)을 AI-Server로 전송.
+    
+    Flow:
+    1. Frontend가 사용자의 YES/NO 선택을 Edge-Module로 전송
+    2. Edge-Module이 AI-Server로 confirm 전송
+    3. YES인 경우, AI-Server가 기기 제어 수행
+    
+    Args:
+        request:
+            - recommendation_id: 추천 ID
+            - confirm: "YES" 또는 "NO"
+    
+    Returns:
+        dict: AI-Server 응답 결과
+    """
+    try:
+        recommendation_id = request.recommendation_id
+        confirm = request.confirm.upper()
+        
+        # Validation
+        if confirm not in ["YES", "NO"]:
+            raise HTTPException(
+                status_code=400,
+                detail="confirm은 'YES' 또는 'NO'만 가능합니다"
+            )
+        
+        logger.info(f"[Recommendations] 📤 사용자 응답을 AI-Server로 전송:")
+        logger.info(f"  - ID: {recommendation_id}")
+        logger.info(f"  - 응답: {confirm}")
+        
+        # 현재 추천 조회
+        current_rec = get_current_recommendation()
+        
+        if not current_rec or current_rec.get("recommendation_id") != recommendation_id:
+            logger.warning(f"⚠️  해당 추천을 찾을 수 없음: {recommendation_id}")
+            # 그래도 AI-Server로 전송 시도
+        
+        # AI-Server로 confirm 전송
+        from backend.services.ai_client import ai_client
+        
+        confirm_result = await ai_client.send_recommendation_confirm(
+            recommendation_id=recommendation_id,
+            confirm=confirm
+        )
+        
+        # 응답 추적 업데이트
+        if recommendation_id in pending_responses:
+            pending_responses[recommendation_id]["accepted"] = (confirm == "YES")
+            pending_responses[recommendation_id]["user_responded"] = True
+            pending_responses[recommendation_id]["response_time"] = time.time()
+        
+        logger.info(f"✅ AI-Server 응답: {confirm_result.get('message', '성공')}")
+        
+        return {
+            "success": True,
+            "recommendation_id": recommendation_id,
+            "confirm": confirm,
+            "ai_response": confirm_result,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[Recommendations] ❌ confirm 전송 실패: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"confirm 전송 실패: {str(e)}"
+        )
+
 

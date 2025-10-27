@@ -324,6 +324,55 @@ class GatewayClient:
             traceback.print_exc()
             return False
     
+    async def get_device_state(self, device_id: str) -> Dict[str, Any]:
+        """기기의 실시간 상태 조회 (Gateway 경유).
+        
+        Gateway의 /api/lg/devices/{device_id}/status 엔드포인트를 호출합니다.
+        (주의: /state 엔드포인트는 404 Not Found를 반환하므로 /status를 사용합니다)
+        
+        Args:
+            device_id: 기기 ID
+        
+        Returns:
+            기기 상태 데이터
+            {
+                "device_id": "...",
+                "type": "aircon",
+                "power": "POWER_OFF" or "POWER_ON",
+                "mode": "COOL",
+                "current_temp": 22,
+                "target_temp": 25,
+                "wind_strength": "MID"
+            }
+        """
+        # /state 대신 /status 엔드포인트 사용
+        state_url = f"{self.gateway_url}/api/lg/devices/{device_id}/status"
+        
+        for attempt in range(3):
+            try:
+                logger.debug(f"📊 기기 상태 조회: {device_id} (시도 {attempt + 1}/3)")
+                
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.get(
+                        state_url,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    
+                    if response.status_code == 200:
+                        state = response.json()
+                        logger.debug(f"   ✓ 상태 조회 성공: {device_id}")
+                        return state
+                    else:
+                        logger.warning(f"⚠️  상태 조회 실패: status={response.status_code}")
+                        
+            except httpx.TimeoutException:
+                logger.warning(f"⏱️  상태 조회 타임아웃 (시도 {attempt + 1}/3)")
+            except Exception as e:
+                logger.warning(f"❌ 상태 조회 에러: {e} (시도 {attempt + 1}/3)")
+        
+        logger.error(f"❌ 상태 조회 실패: {device_id}")
+        return {"error": "상태 조회 실패"}
+    
     @staticmethod
     def _normalize_state(status: str) -> str:
         """상태 정규화 (on/off).
