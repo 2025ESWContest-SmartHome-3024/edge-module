@@ -80,48 +80,88 @@ async def websocket_gaze(websocket: WebSocket):
         # 순환 의존성을 피하기 위해 여기서 임포트
         from backend.api.main import gaze_tracker
         
-        if gaze_tracker is None or not gaze_tracker.is_running:
+        if gaze_tracker is None:
+            logger.warning("[WebSocket] 시선 추적기가 초기화되지 않았습니다 (DEMO 모드)")
+            # 데모 모드: 더미 데이터 제공
+            await websocket.send_json({
+                "type": "calibration_status",
+                "calibrated": True,  # 더미 보정 데이터로 인해 calibrated=true
+                "message": "시선 추적 준비 완료 (DEMO 모드)"
+            })
+            
+            # 더미 시선 데이터 스트리밍
+            import random
+            last_sent_time = 0
+            min_interval = 1.0 / 30.0  # 최대 30 FPS
+            
+            while True:
+                current_time = asyncio.get_event_loop().time()
+                
+                if current_time - last_sent_time >= min_interval:
+                    # 더미 시선 데이터 (화면 중앙 근처)
+                    message = {
+                        "type": "gaze_update",
+                        "timestamp": current_time,
+                        "gaze": [
+                            400 + random.uniform(-50, 50),  # 화면 폭 800 기준
+                            240 + random.uniform(-50, 50)   # 화면 높이 480 기준
+                        ],
+                        "raw_gaze": [400, 240],
+                        "blink": random.random() < 0.05,  # 5% 확률로 깜빡임
+                        "prolonged_blink": False,
+                        "calibrated": True
+                    }
+                    
+                    await websocket.send_json(message)
+                    last_sent_time = current_time
+                
+                await asyncio.sleep(0.01)
+        
+        elif not gaze_tracker.is_running:
+            logger.warning("[WebSocket] 시선 추적기가 실행 중이 아닙니다")
             await websocket.send_json({
                 "type": "error",
-                "message": "시선 추적기가 초기화되지 않았습니다"
+                "message": "시선 추적기가 실행 중이 아닙니다"
             })
             await websocket.close()
             return
         
-        # 초기 캘리브레이션 상태 전송
-        state = gaze_tracker.get_current_state()
-        await websocket.send_json({
-            "type": "calibration_status",
-            "calibrated": state["calibrated"],
-            "message": "시선 추적기에 연결됨"
-        })
-        
-        # 시선 데이터 스트리밍
-        last_sent_time = 0
-        min_interval = 1.0 / 30.0  # 최대 30 FPS (클라이언트를 압도하지 않기 위해)
-        
-        while True:
+        else:
+            # 정상 모드: 실제 시선 데이터 제공
+            # 초기 캘리브레이션 상태 전송
             state = gaze_tracker.get_current_state()
-            current_time = asyncio.get_event_loop().time()
+            await websocket.send_json({
+                "type": "calibration_status",
+                "calibrated": state["calibrated"],
+                "message": "시선 추적기에 연결됨"
+            })
             
-            # 업데이트 속도 제한
-            if current_time - last_sent_time >= min_interval:
-                # JSON 직렬화를 위해 numpy 타입을 Python 네이티브 타입으로 변환
-                message = {
-                    "type": "gaze_update",
-                    "timestamp": current_time,
-                    "gaze": state["gaze"],
-                    "raw_gaze": state["raw_gaze"],
-                    "blink": bool(state["blink"]) if state["blink"] is not None else False,
-                    "prolonged_blink": bool(state.get("prolonged_blink", False)),  # 👁️ 0.5초+ 깜빡임
-                    "calibrated": bool(state["calibrated"]) if state["calibrated"] is not None else False
-                }
+            # 시선 데이터 스트리밍
+            last_sent_time = 0
+            min_interval = 1.0 / 30.0  # 최대 30 FPS (클라이언트를 압도하지 않기 위해)
+            
+            while True:
+                state = gaze_tracker.get_current_state()
+                current_time = asyncio.get_event_loop().time()
                 
-                await websocket.send_json(message)
-                last_sent_time = current_time
-            
-            # 바쁜 대기를 방지하기 위해 작은 대기
-            await asyncio.sleep(0.01)
+                # 업데이트 속도 제한
+                if current_time - last_sent_time >= min_interval:
+                    # JSON 직렬화를 위해 numpy 타입을 Python 네이티브 타입으로 변환
+                    message = {
+                        "type": "gaze_update",
+                        "timestamp": current_time,
+                        "gaze": state["gaze"],
+                        "raw_gaze": state["raw_gaze"],
+                        "blink": bool(state["blink"]) if state["blink"] is not None else False,
+                        "prolonged_blink": bool(state.get("prolonged_blink", False)),  # 👁️ 0.5초+ 깜빡임
+                        "calibrated": bool(state["calibrated"]) if state["calibrated"] is not None else False
+                    }
+                    
+                    await websocket.send_json(message)
+                    last_sent_time = current_time
+                
+                # 바쁜 대기를 방지하기 위해 작은 대기
+                await asyncio.sleep(0.01)
             
     except WebSocketDisconnect:
         manager.disconnect(websocket)

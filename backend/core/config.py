@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     ai_request_timeout: int = int(os.getenv("AI_REQUEST_TIMEOUT", "10"))
     ai_max_retries: int = int(os.getenv("AI_MAX_RETRIES", "3"))
     
+    # ===== Gateway 서버 설정 (로컬 네트워크) =====
+    # Gateway는 로컬 네트워크에 있으므로 직접 조회
+    # localhost:9000 또는 gateway.local:9000
+    gateway_url: str = os.getenv("GATEWAY_URL", "http://localhost:9000")
+    gateway_devices_endpoint: str = os.getenv("GATEWAY_DEVICES_ENDPOINT", "http://localhost:9000/api/devices")
+    gateway_request_timeout: int = int(os.getenv("GATEWAY_REQUEST_TIMEOUT", "5"))
+    
     # ===== 스마트 홈 통합 설정 (선택사항) =====
     home_assistant_url: str = ""
     home_assistant_token: str = ""

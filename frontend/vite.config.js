@@ -23,15 +23,15 @@ export default defineConfig({
                 // 프로덕션: http://raspberrypi.local:8000
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
-                // 요청 경로 재작성: /api/... → /...
-                rewrite: (path) => path.replace(/^\/api/, ''),
+                // 요청 경로 유지: /api/users/login → /api/users/login
+                // (경로 재작성 안 함)
             },
-            '/ws': {
+            '/api/ws': {
                 // WebSocket 연결을 백엔드 서버로 프록시
                 target: 'ws://127.0.0.1:8000',
                 ws: true,
-                // 요청 경로 재작성
-                rewrite: (path) => path.replace(/^\/ws/, ''),
+                // 요청 경로 유지: /api/ws/gaze → /api/ws/gaze
+                // (경로 재작성 안 함)
             },
         },
     },

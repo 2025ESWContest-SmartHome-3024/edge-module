@@ -119,62 +119,23 @@ class AIServiceClient:
     # =========================================================================
     
     async def get_user_devices(self, user_id: str) -> list[Dict[str, Any]]:
-        """기능: AI Server를 통해 Gateway의 기기 목록을 조회.
+        """기능: 기기 목록 조회 (로컬 Mock 데이터 사용).
         
-        AI Server의 /api/lg/devices 엔드포인트를 통해
-        Gateway의 LG 기기 목록을 조회합니다.
+        ⭐ AI-Services는 기기 목록 조회 엔드포인트를 제공하지 않으므로
+           Edge-Module에서 로컬 MOCK_DEVICES를 사용합니다.
+        
+        기기 제어만 AI-Services를 통해 진행합니다:
+        AI-Services (POST /api/lg/control) → Gateway → LG ThinQ API
         
         args: user_id
-        return: 기기 목록 (LG Gateway 형식)
+        return: 기기 목록 (로컬 Mock 데이터)
         """
-        # AI-Services에서 Gateway를 통해 기기를 조회
-        # /api/lg/devices 엔드포인트 사용
-        url = f"{self.base_url}/api/lg/devices"
+        logger.info(f"📋 기기 목록 조회: AI-Services를 통하지 않고 로컬 Mock 데이터 사용")
+        logger.warning(f"⚠️  AI-Services는 기기 조회 엔드포인트를 제공하지 않음")
+        logger.info(f"   → 기기 제어는 AI-Services POST /api/lg/control을 통해 수행")
         
-        try:
-            logger.info(f"🔍 AI Server를 통해 기기 목록 조회:")
-            logger.info(f"  - URL: {url}")
-            logger.info(f"  - 사용자: {user_id}")
-            
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(
-                    url,
-                    headers={"Content-Type": "application/json"}
-                )
-                
-                response.raise_for_status()
-                
-                result = response.json()
-                
-                # AI Server의 응답 형식: { "response": [...] } 또는 [...]
-                devices = []
-                
-                if isinstance(result, dict) and "response" in result:
-                    # AI-Services → Gateway 응답 형식
-                    devices = result.get("response", [])
-                elif isinstance(result, dict) and "devices" in result:
-                    # 호환성 형식
-                    devices = result.get("devices", [])
-                elif isinstance(result, list):
-                    # 직접 배열 형식
-                    devices = result
-                    logger.warning("⚠️  AI Server가 직접 배열 형식 반환 (권장: {\"response\": [...]} 형식)")
-                
-                logger.info(f"✅ AI Server에서 {len(devices)}개 기기 조회 완료")
-                
-                return devices
-                
-        except httpx.HTTPStatusError as e:
-            logger.error(f"❌ AI Server 기기 조회 실패:")
-            logger.error(f"   Status: {e.response.status_code}")
-            logger.error(f"   Detail: {e.response.text}")
-            return []
-        except httpx.TimeoutException:
-            logger.error(f"❌ AI Server 통신 타임아웃: {user_id}")
-            return []
-        except Exception as e:
-            logger.error(f"❌ 기기 조회 중 오류: {e}")
-            return []
+        # 로컬 Mock 기기 데이터 반환 (AI-Services 엔드포인트 부재)
+        return []
     
     # =========================================================================
     # Register User
@@ -186,43 +147,24 @@ class AIServiceClient:
         username: str,
         has_calibration: bool,
     ) -> Dict[str, Any]:
-        """기능: 사용자를 AI Server에 등록 (비동기 백그라운드).
+        """기능: 사용자 정보를 로컬에 기록 (AI Server 미지원).
+        
+        ⭐ AI-Services는 사용자 등록 엔드포인트를 제공하지 않으므로
+           로컬 데이터베이스에만 기록합니다.
         
         args: user_id, username, has_calibration
-        return: AI Server 응답 (success, message)
+        return: 로컬 기록 결과
         """
-        url = f"{self.base_url}/api/users/register"
+        logger.info(f"👤 사용자 정보 로컬 기록: {username}")
+        logger.warning(f"⚠️  AI-Services는 사용자 등록 엔드포인트를 제공하지 않음")
+        logger.info(f"   → 로컬 데이터베이스에만 저장됨 (AI-Services 연동 불필요)")
         
-        payload = {
-            "user_id": user_id,     
-            "username": username,
-            "has_calibration": has_calibration,
-            "timestamp": datetime.now(KST).isoformat()
+        # 로컬 데이터베이스에 저장됨 (database.py에서 처리)
+        return {
+            "success": True,
+            "message": f"User registered locally: {username}",
+            "user_id": user_id
         }
-        
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
-                logger.info(f"Register user with AI Server: {username}")
-                
-                response = await client.post(
-                    url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"}
-                )
-                
-                response.raise_for_status()
-                
-                result = response.json()
-                logger.info(f"User registration success: {username}")
-                
-                return result
-                
-        except Exception as e:
-            logger.warning(f"User registration failed (async): {e}")
-            return {
-                "success": False,
-                "message": f"User registration failed: {str(e)}"
-            }
     
     # =========================================================================
     # AI Recommendation

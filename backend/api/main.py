@@ -25,32 +25,41 @@ async def lifespan(app: FastAPI):
     
     # 🚀 시작 - 시선 추적기 초기화
     logger.info(f"[Backend] GazeHome 웹 서버 시작: {settings.host}:{settings.port}")
-    gaze_tracker = WebGazeTracker(
-        camera_index=settings.camera_index,
-        model_name=settings.model_name,
-        filter_method=settings.filter_method,
-        screen_size=settings.screen_size
-    )
     
     try:
+        gaze_tracker = WebGazeTracker(
+            camera_index=settings.camera_index,
+            model_name=settings.model_name,
+            filter_method=settings.filter_method,
+            screen_size=settings.screen_size
+        )
+        
         await gaze_tracker.initialize()
         logger.info("[Backend] ✅ 시선 추적기 초기화됨")
         
-        # 기본 캘리브레이션이 존재하면 로드
-        default_calibration = settings.calibration_dir / "default.pkl"
+        # ⭐ 더미 보정 파일 자동 로드
+        from pathlib import Path
+        from backend.core.config import settings as config_settings
+        
+        default_calibration = config_settings.calibration_dir / "default.pkl"
         if default_calibration.exists():
-            gaze_tracker.load_calibration(str(default_calibration))
-            logger.info(f"[Backend] ✅ 캘리브레이션 로드됨: {default_calibration}")
+            try:
+                gaze_tracker.load_calibration(str(default_calibration))
+                logger.info(f"[Backend] ✅ 더미 보정 로드됨: {default_calibration}")
+            except Exception as e:
+                logger.warning(f"[Backend] ⚠️  더미 보정 로드 실패: {e}")
         else:
-            logger.warning("[Backend] ⚠️  캘리브레이션을 찾을 수 없습니다. 캘리브레이션이 필요합니다.")
+            logger.warning(f"[Backend] ⚠️  보정 파일을 찾을 수 없습니다: {default_calibration}")
+        
+        # 백그라운드에서 추적 시작
+        asyncio.create_task(gaze_tracker.start_tracking())
+        logger.info("[Backend] ✅ 시선 추적 시작됨")
         
     except Exception as e:
-        logger.error(f"[Backend] ❌ 초기화 실패: {e}", exc_info=True)
-        raise
-    
-    # 백그라운드에서 추적 시작
-    asyncio.create_task(gaze_tracker.start_tracking())
-    logger.info("[Backend] ✅ 시선 추적 시작됨")
+        logger.error(f"[Backend] ⚠️  시선 추적기 초기화 실패: {e}")
+        logger.warning("[Backend] ⚠️  DEMO 모드로 실행 중 (시선 추적 비활성화)")
+        # gaze_tracker = None으로 유지하여 WebSocket에서 더미 데이터 제공
+        gaze_tracker = None
     
     yield
     

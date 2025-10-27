@@ -86,7 +86,7 @@ class Database:
             self._init_demo_user()
     
     def _init_demo_user(self):
-        """기능: 데모 사용자 생성.
+        """기능: 데모 사용자 생성 및 더미 보정 파일 등록.
         
         args: 없음
         return: 없음
@@ -105,6 +105,32 @@ class Database:
                 )
                 conn.commit()
                 logger.info(f"[Database] 데모 사용자 생성: {self.DEFAULT_USERNAME}")
+            
+            # 더미 보정 파일 생성 및 등록
+            user_id = self.get_demo_user_id()
+            
+            # 이미 보정이 등록되었는지 확인
+            cursor.execute("SELECT id FROM calibrations WHERE user_id = ?", (user_id,))
+            has_calibration = cursor.fetchone() is not None
+            
+            if not has_calibration:
+                from backend.core.dummy_calibration import create_dummy_calibration
+                
+                try:
+                    calibration_file = create_dummy_calibration()
+                    
+                    # 데이터베이스에 등록
+                    cursor.execute(
+                        """
+                        INSERT INTO calibrations (user_id, calibration_file, method)
+                        VALUES (?, ?, ?)
+                        """,
+                        (user_id, str(calibration_file), "dummy")
+                    )
+                    conn.commit()
+                    logger.info(f"[Database] ✅ 더미 보정 등록됨: {calibration_file}")
+                except Exception as e:
+                    logger.error(f"[Database] ❌ 더미 보정 생성 실패: {e}")
     
     def get_demo_user_id(self) -> int:
         """기능: 데모 사용자 ID 조회.

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter
+from fastapi import APIRouter, Body
 from pydantic import BaseModel
 
 from backend.core.database import db
@@ -12,8 +12,8 @@ router = APIRouter()
 
 
 class LoginRequest(BaseModel):
-    """사용자 로그인 요청."""
-    pass  # 데모 모드: 추가 데이터 없음
+    """사용자 로그인 요청 - 데모 모드."""
+    pass  # 빈 요청
 
 
 class LoginResponse(BaseModel):
@@ -26,10 +26,10 @@ class LoginResponse(BaseModel):
 
 
 @router.post("/login", response_model=LoginResponse)
-async def login_user(request: LoginRequest = None):
+async def login_user(request: dict = Body(default={})):
     """기능: 데모 사용자 로그인.
     
-    args: 없음
+    args: 없음 (body는 빈 dict)
     return: success, username, has_calibration, calibration_file, message
     """
     try:
@@ -57,23 +57,12 @@ async def login_user(request: LoginRequest = None):
             
             user_id = db.get_demo_user_id()
             
-            if settings.ai_server_url and settings.ai_server_url != "":
-                try:
-                    asyncio.create_task(
-                        ai_client.register_user_async(
-                            user_id=str(user_id),
-                            username=username,
-                            has_calibration=has_calibration
-                        )
-                    )
-                    logger.info(f"User registration request sent (user_id={user_id})")
-                except RuntimeError as e:
-                    logger.error(f"Background task creation failed: {e}")
-            else:
-                logger.info("AI Server URL not set - local mode")
+            # ⭐ AI-Services는 사용자 등록 엔드포인트를 제공하지 않음
+            # → 로컬 데이터베이스에만 저장됨
+            logger.info(f"✅ 사용자 로컬 저장 완료: {username}")
                 
         except Exception as e:
-            logger.error(f"User registration preparation failed: {e}")
+            logger.error(f"사용자 정보 처리 중 오류: {e}")
         
         logger.info(f"Login: {username}, has_calibration: {has_calibration}")
         
