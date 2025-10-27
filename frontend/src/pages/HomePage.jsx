@@ -92,6 +92,39 @@ function HomePage({ onLogout }) {
             const { device_id, device_name, recommendation } = event.detail
             console.log(`[HomePage] 기기 클릭 감지: ${device_name}`, recommendation)
 
+            // ✅ 기기 상태 업데이트 (로컬)
+            // Backend에서 변환된 액션이 포함된 응답에서 새로운 상태 추론
+            try {
+                // Backend 응답에서 action 필드 추출 (변환된 액션)
+                // 예: "aircon_off", "turn_on", "dryer_start" 등
+                // 이를 바탕으로 새로운 상태 추론
+
+                // ✅ 방법 1: action 필드에서 상태 추론
+                // "aircon_off", "dryer_stop", "turn_off" → "off"
+                // "aircon_on", "dryer_start", "turn_on" → "on"
+                let newState = 'off'  // 기본값
+
+                if (recommendation && recommendation.action) {
+                    const action = recommendation.action.toLowerCase()
+                    if (action.includes('on') || action.includes('start')) {
+                        newState = 'on'
+                    } else if (action.includes('off') || action.includes('stop')) {
+                        newState = 'off'
+                    }
+                }
+
+                // ✅ devices 배열 업데이트 (낙관적 업데이트)
+                const updatedDevices = devices.map(device =>
+                    device.device_id === device_id
+                        ? { ...device, state: newState }
+                        : device
+                )
+                setDevices(updatedDevices)
+                console.log(`[HomePage] ✅ 기기 상태 업데이트: ${device_name} → ${newState}`)
+            } catch (error) {
+                console.warn(`[HomePage] ⚠️  상태 업데이트 실패: ${error}`)
+            }
+
             // AI 추천이 있으면 추천 모달 표시
             if (recommendation) {
                 setRecommendations([{
@@ -119,21 +152,23 @@ function HomePage({ onLogout }) {
     }, [])
 
     /**
-     * 스마트홈 기기 목록 로드 (MongoDB 스키마 호환)
+     * 스마트홈 기기 목록 로드 (Gateway 형식 → Frontend 호환)
      * 
      * Backend 응답 형식:
      * {
      *   "success": true,
      *   "devices": [
      *     {
-     *       "device_id": "b403_air_purifier_001",
-     *       "device_type": "air_purifier",
-     *       "alias": "거실 공기청정기",
-     *       "supported_actions": ["turn_on", "turn_off", "clean", "auto"],
-     *       "is_active": true
+     *       "device_id": "aircon_living_room",
+     *       "name": "거실 에어컨",
+     *       "device_type": "aircon",
+     *       "state": "on",
+     *       "metadata": {current_temp, target_temp, ...},
+     *       "source": "gateway_sync"
      *     }
      *   ],
-     *   "count": 3
+     *   "count": 3,
+     *   "source": "gateway_sync"
      * }
      */
     const loadDevices = async () => {
@@ -142,32 +177,35 @@ function HomePage({ onLogout }) {
             const data = await response.json()
 
             if (data.success && data.devices) {
-                // ✅ MongoDB에서 지원하는 기기 타입
+                // ✅ Gateway에서 지원하는 기기 타입 (정규화된 형식)
                 const SUPPORTED_TYPES = ['air_purifier', 'airpurifier', 'dryer', 'air_conditioner', 'aircon']
 
-                // ✅ MongoDB 필드 → Frontend 형식 변환
+                // ✅ Backend 응답 형식 → Frontend 호환 형식 변환
                 const transformedDevices = data.devices
                     .filter(device => SUPPORTED_TYPES.includes(device.device_type))
                     .map((device, index) => {
-                        // device_type 정규화 (air_purifier/airpurifier → airpurifier)
+                        // device_type 정규화 (air_purifier → airpurifier, air_conditioner → aircon)
                         let normalizedType = device.device_type
                         if (normalizedType === 'air_purifier') normalizedType = 'airpurifier'
                         if (normalizedType === 'air_conditioner') normalizedType = 'aircon'
 
+                        // ✅ Backend의 새로운 필드 매핑
                         return {
-                            id: device.device_id,  // ✅ device_id 사용
+                            id: device.device_id,           // ✅ device_id 사용
                             device_id: device.device_id,
-                            name: device.alias,  // ✅ alias → 기기 이름
+                            name: device.name,              // ✅ Backend의 "name" 필드 (alias ❌)
                             type: normalizedType,
-                            supported_actions: device.supported_actions || [],  // ✅ MongoDB 필드
-                            is_active: device.is_active,
-                            room: '거실',  // 기본값
-                            state: 'off',  // 초기값
-                            metadata: {}
+                            room: device.room || '거실',   // ✅ room 필드 (optional)
+                            state: device.state || 'off',  // ✅ Backend의 "state" 필드 사용 (고정값 ❌)
+                            metadata: device.metadata || {} // ✅ Backend의 메타데이터 사용
                         }
                     })
 
-                console.log('[HomePage] 기기 목록 로드 성공 (MongoDB 동기화):', transformedDevices)
+                console.log('[HomePage] 기기 목록 로드 성공 (Gateway 동기화):', transformedDevices)
+                console.log('   기기 개수:', transformedDevices.length)
+                transformedDevices.forEach(device => {
+                    console.log(`   - ${device.name} (${device.type}): state=${device.state}`)
+                })
                 setDevices(transformedDevices)
             } else {
                 console.warn('기기 목록 응답 형식 오류:', data)

@@ -221,48 +221,80 @@ function DeviceCard({ device, onControl, prolongedBlink, isPointerLocked, onPoin
      * 기기 토글 핸들러 (시선 클릭 시 AI 서버로 요청)
      * 
      * 1. POST /api/devices/{device_id}/click 호출 (Backend)
-     * 2. Backend가 AI 서버에서 추천받기
-     * 3. 결과를 custom event로 HomePage에 전달
-     * 4. RecommendationModal에서 사용자 선택 대기
+     * 2. Backend가 기기 제어 및 AI 추천 생성
+     * 3. 변환된 액션과 메시지 수신
+     * 4. 결과를 custom event로 HomePage에 전달
+     * 5. HomePage에서 상태 업데이트 및 모달 표시
      */
     const handleToggle = async () => {
         try {
-            console.log(`[DeviceCard] 시선 클릭: ${device.name}`)
+            console.log(`[DeviceCard] 🎯 기기 제어 시작: ${device.name}`)
 
             // Backend의 POST /api/devices/{device_id}/click 호출
-            // 올바른 요청 형식: { "user_id": "...", "action": "..." }
-            // Response: { "success": true, "device_id": "...", "result": { "recommendation": {...} } }
+            // 요청 형식: { "user_id": "...", "action": "toggle" }
+            // 응답 형식: 
+            // {
+            //   "success": true,
+            //   "device_id": "...",
+            //   "device_name": "...",
+            //   "device_type": "...",
+            //   "action": "aircon_off",    (변환된 액션)
+            //   "message": "[GATEWAY] 스마트 기기(에어컨) 제어 완료",
+            //   "result": {}
+            // }
             const response = await fetch(`/api/devices/${device.device_id || device.id}/click`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     user_id: localStorage.getItem('gazehome_user_id') || 'default_user',
-                    action: 'toggle'
+                    action: 'toggle'  // Backend에서 변환됨
                 })
             })
 
             const result = await response.json()
 
+            console.log(`[DeviceCard] 💬 Backend 응답:`, result)
+
             if (result.success) {
-                console.log(`[DeviceCard] AI 추천 수신:`, result.result)
+                console.log(`[DeviceCard] ✅ 기기 제어 완료: ${result.message}`)
+                console.log(`[DeviceCard] 📤 변환된 액션: ${result.action}`)
 
-                // AI Server 응답에서 추천 추출
-                const recommendation = result.result?.recommendation
-
-                // HomePage에서 처리하기 위해 custom event 발생
+                // ✅ HomePage에서 처리하기 위해 custom event 발생
+                // action 필드를 포함하여 HomePage에서 상태 업데이트 가능하도록 함
                 const event = new CustomEvent('device-clicked', {
                     detail: {
                         device_id: device.device_id || device.id,
-                        device_name: device.name,
-                        recommendation: recommendation
+                        device_name: device.device_name || device.name,
+                        recommendation: {
+                            action: result.action,          // 변환된 액션 포함
+                            message: result.message,
+                            reason: result.message,
+                            success: true
+                        }
                     }
                 })
                 window.dispatchEvent(event)
+
+                console.log(`[DeviceCard] 📢 HomePage에 custom event 전송 (action: ${result.action})`)
             } else {
-                console.error(`[DeviceCard] 클릭 처리 실패:`, result)
+                console.error(`[DeviceCard] ❌ 기기 제어 실패:`, result)
+
+                // 실패 시에도 event 전송 (상태 표시용)
+                const event = new CustomEvent('device-clicked', {
+                    detail: {
+                        device_id: device.device_id || device.id,
+                        device_name: device.device_name || device.name,
+                        recommendation: {
+                            action: 'error',
+                            message: result.message || '기기 제어 실패',
+                            success: false
+                        }
+                    }
+                })
+                window.dispatchEvent(event)
             }
         } catch (error) {
-            console.error(`[DeviceCard] 클릭 처리 오류:`, error)
+            console.error(`[DeviceCard] ❌ 클릭 처리 오류:`, error)
         }
     }
 
