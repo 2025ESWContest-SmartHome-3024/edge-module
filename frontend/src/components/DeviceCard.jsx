@@ -69,7 +69,7 @@ function DeviceCard({ device, onControl }) {
 
     // 기기 타입에 맞는 아이콘
     const Icon = DEVICE_ICONS[device.device_type] || Power
-    
+
     // 액션 그룹화 (action_type별)
     const groupedActions = {}
     if (device.actions && Array.isArray(device.actions)) {
