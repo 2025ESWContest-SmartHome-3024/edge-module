@@ -23,8 +23,20 @@ async def lifespan(app: FastAPI):
     """서버 시작 및 종료 이벤트."""
     global gaze_tracker
     
-    # 🚀 시작 - 시선 추적기 초기화
+    # 🚀 시작 - 시선 추적기 초기화 및 기기 동기화
     logger.info(f"[Backend] GazeHome 웹 서버 시작: {settings.host}:{settings.port}")
+    
+    # ✅ 기기 동기화 (Gateway → Local DB)
+    try:
+        from backend.services.gateway_client import gateway_client
+        logger.info("[Backend] 🔄 Gateway 기기 동기화 시작...")
+        sync_success = await gateway_client.sync_all_devices_to_db()
+        if sync_success:
+            logger.info("[Backend] ✅ 기기 동기화 완료")
+        else:
+            logger.warning("[Backend] ⚠️  기기 동기화 실패 (계속 진행)")
+    except Exception as e:
+        logger.warning(f"[Backend] ⚠️  기기 동기화 중 오류: {e}")
     
     try:
         gaze_tracker = WebGazeTracker(

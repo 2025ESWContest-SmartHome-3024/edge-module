@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import logging
 import httpx
+import json
 from typing import Dict, Any, List, Optional
+from datetime import datetime
 
 from backend.core.config import settings
+from backend.core.database import db
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +17,8 @@ class GatewayClient:
     """Gateway 직접 통신 클라이언트.
     
     ✅ 기기 목록: Gateway에서 직접 조회
+    ✅ 기기 프로필: Gateway에서 직접 조회 (기능 상세 정보)
+    ✅ 로컬 DB 동기화: 기기 및 액션 저장
     ❌ 기기 제어: AI-Services 경유
     """
     
@@ -23,6 +28,8 @@ class GatewayClient:
         self.devices_endpoint = settings.gateway_devices_endpoint.rstrip('/')
         self.timeout = settings.gateway_request_timeout
         logger.info(f"✅ GatewayClient 초기화: {self.gateway_url}")
+        logger.info(f"   - 기기 목록 API: GET {self.devices_endpoint}")
+        logger.info(f"   - 기기 프로필 API: GET {self.gateway_url}/api/lg/devices/{{deviceId}}/profile")
     
     async def get_devices(self) -> Dict[str, Any]:
         """Gateway에서 기기 목록 조회 (직접).
@@ -110,6 +117,212 @@ class GatewayClient:
             "count": 0,
             "source": "gateway_failed"
         }
+    
+    async def get_device_profile(self, device_id: str) -> Dict[str, Any]:
+        """Gateway에서 특정 기기의 프로필 조회 (상세 기능 정보).
+        
+        Args:
+            device_id: 기기 ID
+        
+        Returns:
+            기기 프로필 (작업, 타이머, 알림 등)
+        """
+        profile_url = f"{self.gateway_url}/api/lg/devices/{device_id}/profile"
+        
+        for attempt in range(3):
+            try:
+                logger.debug(f"🔍 기기 프로필 조회: {device_id} (시도 {attempt + 1}/3)")
+                
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    response = await client.get(
+                        profile_url,
+                        headers={"Content-Type": "application/json"}
+                    )
+                    
+                    if response.status_code == 200:
+                        profile = response.json()
+                        logger.debug(f"   ✓ 프로필 조회 성공: {device_id}")
+                        return profile
+                    else:
+                        logger.warning(f"⚠️  프로필 조회 실패: status={response.status_code}")
+                        
+            except httpx.TimeoutException:
+                logger.warning(f"⏱️  프로필 조회 타임아웃 (시도 {attempt + 1}/3)")
+            except Exception as e:
+                logger.warning(f"❌ 프로필 조회 에러: {e} (시도 {attempt + 1}/3)")
+        
+        logger.error(f"❌ 프로필 조회 실패: {device_id}")
+        return {}
+    
+    def _extract_device_actions(self, device_type: str, profile: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """기기 프로필에서 사용 가능한 액션 추출.
+        
+        Args:
+            device_type: 기기 유형 (air_conditioner, dryer, etc.)
+            profile: 기기 프로필 데이터
+        
+        Returns:
+            액션 리스트
+        """
+        actions = []
+        
+        try:
+            # 프로필 구조:
+            # {
+            #   "property": {...},
+            #   "operation": [...],
+            #   "timer": {...},
+            #   "notification": {...}
+            # }
+            
+            # 1️⃣ operation에서 액션 추출
+            operations = profile.get("operation", [])
+            if isinstance(operations, list):
+                for op in operations:
+                    op_name = op.get("_comment", "")
+                    commands = op.get("command", {})
+                    
+                    for cmd_name, cmd_data in commands.items():
+                        if isinstance(cmd_data, dict):
+                            # 각 명령어가 여러 옵션을 가질 수 있음
+                            write_data = cmd_data.get("_write", {})
+                            
+                            for write_name, write_values in write_data.items():
+                                if isinstance(write_values, dict):
+                                    value_options = write_values.get("_value", [])
+                                    
+                                    # 각 옵션을 별도 액션으로 생성
+                                    for value in value_options:
+                                        actions.append({
+                                            "action_type": "operation",
+                                            "action_name": f"{write_name}_{value}",
+                                            "readable": True,
+                                            "writable": True,
+                                            "value_type": "enum",
+                                            "value_range": json.dumps(value_options)
+                                        })
+                                elif isinstance(write_values, list):
+                                    # 값이 리스트인 경우
+                                    actions.append({
+                                        "action_type": "operation",
+                                        "action_name": write_name,
+                                        "readable": True,
+                                        "writable": True,
+                                        "value_type": "enum",
+                                        "value_range": json.dumps(write_values)
+                                    })
+            
+            # 2️⃣ property에서 제어 가능한 속성 추출
+            properties = profile.get("property", {})
+            if isinstance(properties, dict):
+                for prop_name, prop_data in properties.items():
+                    if isinstance(prop_data, dict):
+                        # property → operation → XXX → w/r 구조
+                        operations = prop_data.get("operation", {})
+                        if isinstance(operations, dict):
+                            for op_name, op_data in operations.items():
+                                write_values = op_data.get("w", [])
+                                if write_values:
+                                    actions.append({
+                                        "action_type": "property",
+                                        "action_name": f"{prop_name}_{op_name}",
+                                        "readable": bool(op_data.get("r")),
+                                        "writable": bool(op_data.get("w")),
+                                        "value_type": "enum" if isinstance(write_values, list) else "range",
+                                        "value_range": json.dumps(write_values)
+                                    })
+            
+            # 3️⃣ timer에서 액션 추출
+            timers = profile.get("timer", {})
+            if isinstance(timers, dict):
+                for timer_name, timer_data in timers.items():
+                    if isinstance(timer_data, dict):
+                        actions.append({
+                            "action_type": "timer",
+                            "action_name": timer_name,
+                            "readable": True,
+                            "writable": True,
+                            "value_type": "integer",
+                            "value_range": json.dumps(timer_data.get("_value", []))
+                        })
+            
+            logger.info(f"   ✓ 추출된 액션: {len(actions)}개")
+            return actions
+            
+        except Exception as e:
+            logger.error(f"❌ 액션 추출 실패: {e}")
+            return []
+    
+    async def sync_all_devices_to_db(self) -> bool:
+        """Gateway의 모든 기기를 조회해서 로컬 DB에 동기화.
+        
+        1. Gateway /api/lg/devices 조회
+        2. 각 기기의 /api/lg/devices/{id}/profile 조회
+        3. 기기 정보 + 액션을 로컬 DB에 저장
+        
+        Returns:
+            동기화 성공 여부
+        """
+        try:
+            logger.info("=" * 60)
+            logger.info("🔄 Gateway 기기 동기화 시작")
+            logger.info("=" * 60)
+            
+            # Step 1: 기기 목록 조회
+            devices_result = await self.get_devices()
+            if not devices_result.get("success"):
+                logger.error("❌ 기기 목록 조회 실패")
+                return False
+            
+            devices = devices_result.get("devices", [])
+            logger.info(f"📋 조회된 기기: {len(devices)}개\n")
+            
+            # Step 2: 각 기기 프로필 조회 및 DB 저장
+            for idx, device in enumerate(devices, 1):
+                device_id = device.get("device_id")
+                device_type = device.get("device_type", "unknown")
+                alias = device.get("name", "Unknown Device")
+                
+                logger.info(f"{idx}. [{device_type.upper()}] {alias}")
+                logger.info(f"   Device ID: {device_id}")
+                
+                # 프로필 조회
+                profile = await self.get_device_profile(device_id)
+                
+                if not profile:
+                    logger.warning(f"   ⚠️  프로필 조회 실패, 기본 정보만 저장")
+                    profile = {}
+                
+                # 액션 추출
+                actions = self._extract_device_actions(device_type, profile)
+                logger.info(f"   📌 액션: {len(actions)}개\n")
+                
+                # DB 저장
+                # 1. 기기 정보 저장
+                db.save_device(
+                    device_id=device_id,
+                    device_type=device_type,
+                    alias=alias,
+                    model_name=device.get("model_name"),
+                    reportable=device.get("reportable", True),
+                    device_profile=json.dumps(profile)
+                )
+                
+                # 2. 기기 액션 저장
+                if actions:
+                    db.save_device_actions(device_id, actions)
+            
+            logger.info("=" * 60)
+            logger.info(f"✅ 동기화 완료: {len(devices)}개 기기 저장됨")
+            logger.info("=" * 60)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"❌ 동기화 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     @staticmethod
     def _normalize_state(status: str) -> str:

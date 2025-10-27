@@ -63,19 +63,35 @@ class Database:
                 )
             """)
             
-            # ✅ 기기 테이블 (MongoDB 스키마 동기화)
+            # ✅ 기기 테이블 (Gateway에서 조회한 기기 정보 저장)
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS devices (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id TEXT NOT NULL,
                     device_id TEXT NOT NULL UNIQUE,
-                    device_type TEXT,
+                    device_type TEXT NOT NULL,
                     alias TEXT NOT NULL,
-                    supported_actions TEXT,
-                    is_active BOOLEAN DEFAULT 1,
+                    model_name TEXT,
+                    reportable BOOLEAN DEFAULT 1,
+                    device_profile TEXT,
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE(user_id, device_id)
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            
+            # ✅ 기기 액션 테이블 (기기별 사용 가능한 액션)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS device_actions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    device_id TEXT NOT NULL,
+                    action_type TEXT NOT NULL,
+                    action_name TEXT NOT NULL,
+                    readable BOOLEAN DEFAULT 1,
+                    writable BOOLEAN DEFAULT 1,
+                    value_type TEXT,
+                    value_range TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (device_id) REFERENCES devices(device_id),
+                    UNIQUE(device_id, action_type, action_name)
                 )
             """)
             
@@ -297,7 +313,6 @@ class Database:
             cursor.execute(
                 """
                 SELECT * FROM devices
-                WHERE is_active = 1
                 ORDER BY id DESC
                 """
             )
@@ -305,15 +320,129 @@ class Database:
             devices = []
             for row in cursor.fetchall():
                 device = dict(row)
-                try:
-                    # ✅ supported_actions JSON 파싱
-                    device["supported_actions"] = json.loads(device.get("supported_actions", "[]"))
-                except (json.JSONDecodeError, TypeError):
-                    device["supported_actions"] = []
                 devices.append(device)
             
-            logger.info(f"[Database] {len(devices)}개 활성 기기 조회됨")
+            logger.info(f"[Database] {len(devices)}개 기기 조회됨")
             return devices
+    
+    # =========================================================================
+    # 기기 관리 (Gateway 동기화)
+    # =========================================================================
+    
+    def save_device(
+        self,
+        device_id: str,
+        device_type: str,
+        alias: str,
+        model_name: str = None,
+        reportable: bool = True,
+        device_profile: str = None
+    ) -> bool:
+        """기능: Gateway에서 조회한 기기 정보를 로컬 DB에 저장.
+        
+        args: device_id, device_type, alias, model_name, reportable, device_profile (JSON)
+        return: 저장 성공 여부
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                cursor.execute("""
+                    INSERT OR REPLACE INTO devices 
+                    (device_id, device_type, alias, model_name, reportable, device_profile, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                """, (device_id, device_type, alias, model_name, reportable, device_profile))
+                
+                conn.commit()
+                logger.info(f"[Database] 기기 저장됨: {alias} ({device_type})")
+                return True
+                
+        except Exception as e:
+            logger.error(f"[Database] 기기 저장 실패: {e}")
+            return False
+    
+    def save_device_actions(self, device_id: str, actions: List[Dict]) -> bool:
+        """기능: 기기의 사용 가능한 액션 저장.
+        
+        args: device_id, actions (리스트)
+        return: 저장 성공 여부
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                
+                # 기존 액션 삭제
+                cursor.execute("DELETE FROM device_actions WHERE device_id = ?", (device_id,))
+                
+                # 새 액션 저장
+                for action in actions:
+                    cursor.execute("""
+                        INSERT INTO device_actions 
+                        (device_id, action_type, action_name, readable, writable, value_type, value_range)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        device_id,
+                        action.get("action_type", "operation"),
+                        action.get("action_name"),
+                        action.get("readable", True),
+                        action.get("writable", True),
+                        action.get("value_type"),
+                        action.get("value_range")
+                    ))
+                
+                conn.commit()
+                logger.info(f"[Database] 기기 액션 저장됨: {device_id} ({len(actions)}개)")
+                return True
+                
+        except Exception as e:
+            logger.error(f"[Database] 기기 액션 저장 실패: {e}")
+            return False
+    
+    def get_device_by_id(self, device_id: str) -> Optional[Dict]:
+        """기능: 기기 정보 조회 (by device_id).
+        
+        args: device_id
+        return: 기기 정보 딕셔너리 또는 None
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute("SELECT * FROM devices WHERE device_id = ?", (device_id,))
+                row = cursor.fetchone()
+                
+                if row:
+                    return dict(row)
+                return None
+                
+        except Exception as e:
+            logger.error(f"[Database] 기기 조회 실패: {e}")
+            return None
+    
+    def get_device_actions(self, device_id: str) -> List[Dict]:
+        """기능: 기기의 사용 가능한 액션 조회.
+        
+        args: device_id
+        return: 액션 리스트
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.row_factory = sqlite3.Row
+                cursor = conn.cursor()
+                
+                cursor.execute(
+                    "SELECT * FROM device_actions WHERE device_id = ? ORDER BY action_type, action_name",
+                    (device_id,)
+                )
+                
+                actions = [dict(row) for row in cursor.fetchall()]
+                logger.debug(f"[Database] 기기 액션 조회: {device_id} ({len(actions)}개)")
+                return actions
+                
+        except Exception as e:
+            logger.error(f"[Database] 기기 액션 조회 실패: {e}")
+            return []
 
 
 # 전역 데이터베이스 인스턴스

@@ -1,7 +1,7 @@
 """스마트 홈 디바이스 제어를 위한 REST API 엔드포인트."""
 import logging
-import time
-from typing import Optional, Dict, Any
+import json
+from typing import Optional, Dict, Any, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -12,327 +12,315 @@ from backend.core.database import db
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
-# ============================================================================
-# 기기별 액션 매핑: "toggle" → 기기별 구체적 액션 변환
-# Gateway 실제 device_type과 매핑됨
-# ============================================================================
-DEVICE_ACTION_MAPPING = {
-    "aircon": {
-        "toggle_on": "aircon_on",
-        "toggle_off": "aircon_off",
-        "toggle": None  # 상태에 따라 동적 결정
-    },
-    "airconditioner": {  # ← air_conditioner 정규화
-        "toggle_on": "aircon_on",
-        "toggle_off": "aircon_off",
-        "toggle": None
-    },
-    "airpurifier": {
-        "toggle_on": "turn_on",
-        "toggle_off": "turn_off",
-        "toggle": None
-    },
-    "air_purifier": {
-        "toggle_on": "turn_on",
-        "toggle_off": "turn_off",
-        "toggle": None
-    },
-    "dryer": {
-        "toggle_on": "dryer_start",
-        "toggle_off": "dryer_stop",
-        "toggle": None
-    }
-}
-
-# Mock 기기 데이터 (Gateway의 실제 기기 ID 사용)
-# 지원되는 기기: 공기청정기, 건조기, 에어컨
-# Gateway에서 조회하는 실제 device_id: b403_*_001
-MOCK_DEVICES = [
-    {
-        "device_id": "b403_air_purifier_001",
-        "name": "거실 공기청정기",
-        "device_type": "air_purifier",
-        "state": "on",
-        "metadata": {
-            "mode": "auto",
-            "pm25": 45,
-            "status": "on"
-        }
-    },
-    {
-        "device_id": "b403_dryer_001",
-        "name": "세탁실 건조기",
-        "device_type": "dryer",
-        "state": "off",
-        "metadata": {
-            "time_remaining": 45,
-            "temperature": 70,
-            "status": "off"
-        }
-    },
-    {
-        "device_id": "b403_ac_001",
-        "name": "거실 에어컨",
-        "device_type": "air_conditioner",
-        "state": "on",
-        "metadata": {
-            "current_temp": 26,
-            "target_temp": 24,
-            "mode": "cool",
-            "status": "on"
-        }
-    }
-]
-
 
 class DeviceClickRequest(BaseModel):
-    """기기 클릭 요청."""
-    user_id: str = Field(..., description="사용자 ID")
-    action: str = Field(..., description="기기 액션 (turn_on, turn_off 등)")
+    """기기 액션 요청."""
+    action: str = Field(..., description="액션명")
+    value: Optional[str] = Field(None, description="액션 값 (선택사항)")
 
 
-def format_gateway_device(device: Dict[str, Any]) -> Dict[str, Any]:
-    """기능: Gateway 기기 형식을 Frontend 호환 형식으로 변환.
-    
-    Gateway 응답: {deviceId, deviceInfo: {alias, deviceType, status}}
-    Frontend 기대: {device_id, name, device_type, state}
-    
-    args: device (Gateway 형식)
-    return: 변환된 기기 정보
-    """
-    # Gateway 형식 처리
-    if isinstance(device, dict):
-        device_id = device.get("deviceId") or device.get("device_id")
-        device_info = device.get("deviceInfo", {}) or device.get("info", {})
-        
-        # 1️⃣ 기기 아이디
-        if not device_id:
-            logger.warning(f"Device missing deviceId: {device}")
-            return None
-        
-        # 2️⃣ 기기명
-        name = device_info.get("alias") or device.get("name") or device.get("device_name", "Unknown")
-        
-        # 3️⃣ 기기 타입
-        device_type = (device_info.get("deviceType") or 
-                      device.get("type") or 
-                      device.get("device_type", "unknown")).lower()
-        
-        # 정규화: "air_purifier" → "airpurifier", "air_conditioner" → "airconditioner"
-        device_type = device_type.replace("_", "")
-        
-        # "airconditioner" → "aircon" 호환성 매핑
-        if device_type == "airconditioner":
-            device_type = "airconditioner"  # DEVICE_ACTION_MAPPING에 airconditioner 추가됨
-        
-        # 4️⃣ 기기 상태 (on/off)
-        status = device.get("status") or device_info.get("status", "offline")
-        state = "on" if str(status).lower() in ["on", "true", "1"] else "off"
-        
-        return {
-            "device_id": device_id,
-            "name": name,
-            "device_type": device_type,
-            "state": state,
-            "source": "gateway_sync"
-        }
-    
-    return None
 
 
-def convert_toggle_action(device_type: str, current_state: str, action: str) -> str:
-    """기능: "toggle" 액션을 기기별 구체적 액션으로 변환.
-    
-    args: device_type (aircon, airpurifier 등), current_state (on/off), action ("toggle" 등)
-    return: 변환된 액션 (aircon_on, aircon_off 등)
-    """
-    # action이 이미 구체적이면 그대로 반환
-    if action not in ["toggle", "turn_on", "turn_off", "toggle_on", "toggle_off"]:
-        logger.info(f"Action is already specific: {action}")
-        return action
-    
-    # 기기 타입별 매핑 테이블에서 찾기
-    device_type_lower = device_type.lower().replace("_", "")
-    
-    if device_type_lower not in DEVICE_ACTION_MAPPING:
-        logger.warning(f"Unknown device type: {device_type}. Using action as-is: {action}")
-        return action
-    
-    mapping = DEVICE_ACTION_MAPPING[device_type_lower]
-    
-    # "toggle"인 경우 현재 상태에 따라 결정
-    if action == "toggle":
-        if current_state == "on":
-            mapped_action = mapping.get("toggle_off", "turn_off")
-        else:
-            mapped_action = mapping.get("toggle_on", "turn_on")
-    else:
-        # "turn_on" → "toggle_on", "turn_off" → "toggle_off"로 정규화
-        normalized_action = f"toggle_{action.split('_')[-1]}"
-        mapped_action = mapping.get(normalized_action, action)
-    
-    logger.info(f"Action mapping: {device_type}({current_state}) + {action} → {mapped_action}")
-    
-    return mapped_action
 
+# ===============================================================================
+# 🔄 기기 동기화 엔드포인트
+# ===============================================================================
 
-@router.get("/")
-async def get_devices():
-    """기능: Gateway에서 기기 목록을 직접 조회.
-    
-    ✅ 기기 목록 조회: Gateway 직접 (로컬 네트워크)
+@router.post("/sync")
+async def sync_devices_from_gateway():
+    """기능: Gateway에서 모든 기기와 액션을 조회해서 로컬 DB에 동기화.
     
     Flow:
-    1. Edge-Module이 Gateway에 기기 목록 요청 (직접)
-    2. Gateway에서 LG ThinQ 기기 조회
-    3. Frontend 호환 형식으로 변환하여 반환
+    1. Gateway /api/lg/devices에서 기기 목록 조회
+    2. 각 기기의 /api/lg/devices/{id}/profile 조회
+    3. 기기 정보 + 액션을 로컬 SQLite DB에 저장
+    4. 동기화 결과 반환
     
-    args: 없음
-    return: Gateway 기기 목록 (Frontend 호환 형식)
+    Returns:
+        {
+            "success": true,
+            "devices_synced": 5,
+            "total_actions": 42,
+            "timestamp": "2024-01-01T12:00:00"
+        }
     """
     try:
-        logger.info("📋 기기 목록 조회 (Gateway 직접 조회)")
+        logger.info("\n" + "="*60)
+        logger.info("� 기기 동기화 시작 (Gateway → Local DB)")
+        logger.info("="*60)
         
-        # ✅ Gateway에서 직접 기기 목록 조회
-        gateway_response = await gateway_client.get_devices()
+        success = await gateway_client.sync_all_devices_to_db()
         
-        if gateway_response.get("success"):
-            devices = gateway_response.get("devices", [])
-            logger.info(f"✅ Gateway에서 {len(devices)}개 기기 조회 성공")
-            logger.info(f"   기기: {[d.get('name') for d in devices]}")
+        if success:
+            # 동기화된 기기 수 계산
+            all_devices = db.get_all_devices()
+            total_devices = len(all_devices)
+            total_actions = 0
+            
+            for device in all_devices:
+                actions = db.get_device_actions(device.get("device_id"))
+                total_actions += len(actions)
+            
+            logger.info("="*60)
+            logger.info(f"✅ 동기화 완료!")
+            logger.info(f"   - 동기화된 기기: {total_devices}개")
+            logger.info(f"   - 총 액션: {total_actions}개")
+            logger.info("="*60 + "\n")
             
             return {
                 "success": True,
-                "devices": devices,
-                "count": len(devices),
-                "source": "gateway"
+                "devices_synced": total_devices,
+                "total_actions": total_actions,
+                "timestamp": datetime.now().isoformat(),
+                "message": f"성공: {total_devices}개 기기, {total_actions}개 액션"
             }
         else:
-            logger.warning("⚠️  Gateway 기기 조회 실패, MOCK_DEVICES 사용")
-            
+            logger.error("❌ 동기화 실패")
             return {
                 "success": False,
-                "devices": MOCK_DEVICES,
-                "count": len(MOCK_DEVICES),
-                "source": "mock_fallback",
-                "error": "Gateway 통신 실패"
+                "message": "Gateway와의 동기화 실패",
+                "timestamp": datetime.now().isoformat()
             }
     
     except Exception as e:
-        logger.error(f"❌ 기기 조회 중 오류: {e}", exc_info=True)
-        
+        logger.error(f"❌ 동기화 중 오류: {e}", exc_info=True)
         return {
             "success": False,
-            "devices": MOCK_DEVICES,
-            "count": len(MOCK_DEVICES),
-            "source": "mock_fallback",
-            "error": str(e)
+            "message": f"오류: {str(e)}",
+            "timestamp": datetime.now().isoformat()
         }
 
 
-@router.post("/{device_id}/click")
-async def handle_device_click(device_id: str, request: DeviceClickRequest):
-    """기능: 기기 클릭 이벤트를 처리하고 기기 제어.
-    
-    ✅ 기기 정보: Gateway에서 직접 조회
-    ✅ 기기 제어: AI-Services 경유
+# ===============================================================================
+# 📋 기기 목록 조회 엔드포인트 (로컬 DB)
+# ===============================================================================
+
+@router.get("/")
+async def get_devices():
+    """기능: 로컬 DB에서 기기 목록 + 각 기기의 사용 가능한 액션 조회.
     
     Flow:
-    1. Gateway에서 기기 목록 조회 (현재 상태 확인)
-    2. 액션 매핑: "toggle" → 기기별 구체적 액션
-    3. AI-Services로 기기 제어 요청
-    4. AI-Services → Gateway → LG ThinQ API
+    1. SQLite에서 devices 테이블 조회
+    2. 각 기기의 device_actions 조회
+    3. Frontend 호환 형식으로 응답
     
-    args: device_id (path), user_id, action (body)
-    return: 성공 여부, device_id, action, 메시지
+    Returns:
+        {
+            "success": true,
+            "devices": [
+                {
+                    "device_id": "1d7c7408...",
+                    "name": "거실 에어컨",
+                    "device_type": "air_conditioner",
+                    "actions": [
+                        {
+                            "id": 1,
+                            "action_type": "operation",
+                            "action_name": "POWER_ON_POWER_OFF",
+                            "readable": true,
+                            "writable": true,
+                            "value_type": "enum",
+                            "value_range": "[\"POWER_ON\", \"POWER_OFF\"]"
+                        }
+                    ]
+                }
+            ],
+            "count": 5,
+            "source": "local_db"
+        }
     """
     try:
-        user_id = request.user_id or "default_user"
-        action = request.action or "toggle"
+        logger.info("� 기기 목록 조회 (Local DB)")
         
-        logger.info(
-            f"🎯 기기 제어 요청: device_id={device_id}, "
-            f"user_id={user_id}, action={action}"
-        )
+        # 1️⃣ 로컬 DB에서 기기 목록 조회
+        devices = db.get_all_devices()
         
-        # 1️⃣ Gateway에서 실시간 기기 정보 조회
-        logger.info(f"🔍 Gateway에서 기기 정보 조회 중: {device_id}")
+        if not devices:
+            logger.warning("⚠️  로컬 DB에 기기가 없음. 먼저 동기화 필요")
+            return {
+                "success": True,
+                "devices": [],
+                "count": 0,
+                "source": "local_db",
+                "message": "기기가 없습니다. POST /api/devices/sync를 실행해주세요."
+            }
         
-        gateway_response = await gateway_client.get_devices()
+        # 2️⃣ 각 기기의 액션 조회
+        device_list = []
+        for device in devices:
+            device_id = device.get("device_id")
+            actions = db.get_device_actions(device_id)
+            
+            device_list.append({
+                "device_id": device_id,
+                "name": device.get("alias"),
+                "device_type": device.get("device_type"),
+                "model_name": device.get("model_name"),
+                "actions": actions,
+                "action_count": len(actions)
+            })
         
-        if not gateway_response.get("success"):
-            # Gateway 실패 시 MOCK_DEVICES 사용
-            logger.warning("⚠️  Gateway 조회 실패, MOCK_DEVICES 사용")
-            devices = MOCK_DEVICES
-        else:
-            devices = gateway_response.get("devices", [])
+        logger.info(f"✅ 기기 조회 성공: {len(device_list)}개")
         
-        # 기기 찾기
-        device_info = next(
-            (d for d in devices if d.get("device_id") == device_id),
-            None
-        )
+        return {
+            "success": True,
+            "devices": device_list,
+            "count": len(device_list),
+            "source": "local_db"
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ 기기 조회 중 오류: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"오류: {str(e)}"
+        }
+
+
+# ===============================================================================
+# 🎯 기기 제어 엔드포인트
+# ===============================================================================
+
+@router.post("/{device_id}/click")
+async def handle_device_action(device_id: str, request: DeviceClickRequest):
+    """기능: 기기의 특정 액션 실행.
+    
+    Flow:
+    1. 로컬 DB에서 기기 정보 조회
+    2. AI-Services로 기기 제어 요청
+    3. AI-Services → Gateway → LG ThinQ API
+    
+    Args:
+        device_id: 기기 ID
+        request:
+            - action: 액션명 (예: "POWER_ON_POWER_OFF", "temperature_18")
+            - value: 액션 값 (선택사항)
+    
+    Returns:
+        {
+            "success": true,
+            "device_id": "1d7c7408...",
+            "device_name": "거실 에어컨",
+            "action": "POWER_ON_POWER_OFF",
+            "message": "제어 성공"
+        }
+    """
+    try:
+        action = request.action
+        value = request.value
         
-        if not device_info:
+        logger.info(f"🎯 기기 제어 요청:")
+        logger.info(f"   - 기기 ID: {device_id}")
+        logger.info(f"   - 액션: {action}")
+        if value:
+            logger.info(f"   - 값: {value}")
+        
+        # 1️⃣ 로컬 DB에서 기기 정보 조회
+        device = db.get_device_by_id(device_id)
+        if not device:
             logger.warning(f"❌ 기기를 찾을 수 없음: {device_id}")
-            raise HTTPException(
-                status_code=404,
-                detail=f"기기를 찾을 수 없습니다: {device_id}"
-            )
+            raise HTTPException(status_code=404, detail="기기를 찾을 수 없습니다")
         
-        device_name = device_info.get("name", device_id)
-        device_type = device_info.get("device_type", "unknown")
-        current_state = device_info.get("state", "off")
+        device_name = device.get("alias", device_id)
+        device_type = device.get("device_type")
         
-        logger.info(
-            f"📍 기기 정보: 이름={device_name}, 타입={device_type}, 상태={current_state}"
+        logger.info(f"   - 기기명: {device_name}")
+        logger.info(f"   - 기기타입: {device_type}")
+        
+        # 2️⃣ AI-Services로 기기 제어 요청
+        logger.info(f"🚀 AI-Services로 제어 요청 중...")
+        
+        control_result = await ai_client.send_device_control(
+            device_id=device_id,
+            action=action,
+            value=value
         )
         
-        # 2️⃣ 액션 매핑: "toggle" → 기기별 구체적 액션 변환
-        mapped_action = convert_toggle_action(device_type, current_state, action)
-        logger.info(f"🔄 액션 매핑: {action} → {mapped_action}")
+        success = control_result.get("success", True)
+        message = control_result.get("message", "제어 완료")
         
-        # 3️⃣ AI-Services로 기기 제어 요청 (기기 제어는 반드시 AI-Services 경유)
-        try:
-            logger.info(f"🚀 AI-Services로 기기 제어 요청:")
-            logger.info(f"   - 기기 ID: {device_id}")
-            logger.info(f"   - 기기명: {device_name}")
-            logger.info(f"   - 기기 타입: {device_type}")
-            logger.info(f"   - 액션: {mapped_action}")
-            
-            # AI-Services POST /api/lg/control
-            control_result = await ai_client.send_device_control(
-                device_id=device_id,
-                action=mapped_action
-            )
-            
-            success = control_result.get("success", True)
-            message = control_result.get("message", f"기기 제어 완료: {mapped_action}")
-            
-            logger.info(f"✅ AI-Services 제어 성공: {message}")
-            
-        except Exception as e:
-            logger.error(f"❌ AI-Services 제어 실패: {e}")
-            success = False
-            message = f"제어 실패: {str(e)}"
+        logger.info(f"✅ 제어 결과: {message}")
         
-        # 4️⃣ 응답
         return {
             "success": success,
             "device_id": device_id,
             "device_name": device_name,
             "device_type": device_type,
-            "action": mapped_action,
+            "action": action,
+            "value": value,
             "message": message
         }
     
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ 기기 제어 중 예기치 않은 오류: {e}", exc_info=True)
+        logger.error(f"❌ 기기 제어 중 오류: {e}", exc_info=True)
         return {
             "success": False,
             "device_id": device_id,
             "message": f"오류: {str(e)}"
         }
+
+
+# ===============================================================================
+# ℹ️  기기 상세 정보 조회 엔드포인트
+# ===============================================================================
+
+@router.get("/{device_id}")
+async def get_device_detail(device_id: str):
+    """기능: 특정 기기의 상세 정보 + 모든 액션 조회.
+    
+    Args:
+        device_id: 기기 ID
+    
+    Returns:
+        {
+            "success": true,
+            "device_id": "1d7c7408...",
+            "name": "거실 에어컨",
+            "device_type": "air_conditioner",
+            "model_name": "LG AC 2024",
+            "device_profile": {...},
+            "actions": [...]
+        }
+    """
+    try:
+        logger.info(f"ℹ️  기기 상세 정보 조회: {device_id}")
+        
+        device = db.get_device_by_id(device_id)
+        if not device:
+            raise HTTPException(status_code=404, detail="기기를 찾을 수 없습니다")
+        
+        actions = db.get_device_actions(device_id)
+        
+        # device_profile은 JSON 문자열이므로 파싱
+        device_profile = device.get("device_profile")
+        if isinstance(device_profile, str):
+            try:
+                device_profile = json.loads(device_profile)
+            except:
+                device_profile = {}
+        
+        return {
+            "success": True,
+            "device_id": device_id,
+            "name": device.get("alias"),
+            "device_type": device.get("device_type"),
+            "model_name": device.get("model_name"),
+            "device_profile": device_profile,
+            "actions": actions,
+            "action_count": len(actions)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ 기기 정보 조회 중 오류: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"오류: {str(e)}"
+        }
+
+
+from datetime import datetime
 
