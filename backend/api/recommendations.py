@@ -337,12 +337,16 @@ class RecommendationConfirmRequest(BaseModel):
 
 @router.post("/confirm")
 async def confirm_recommendation(request: RecommendationConfirmRequest):
-    """사용자 응답(YES/NO)을 AI-Server로 전송.
+    """사용자 응답(YES/NO)을 처리하고 필요시 기기 제어 수행.
     
     Flow:
     1. Frontend가 사용자의 YES/NO 선택을 Edge-Module로 전송
-    2. Edge-Module이 AI-Server로 confirm 전송
-    3. YES인 경우, AI-Server가 기기 제어 수행
+    2. Edge-Module이 로컬에서 처리:
+       - YES: 추천의 device_control 정보로 기기 제어 수행
+       - NO: 응답만 기록
+    
+    ⚠️  NOTE: AI-Server에는 /api/recommendations/confirm 엔드포인트가 없으므로
+    Edge-Module이 로컬에서 처리합니다.
     
     Args:
         request:
@@ -350,7 +354,7 @@ async def confirm_recommendation(request: RecommendationConfirmRequest):
             - confirm: "YES" 또는 "NO"
     
     Returns:
-        dict: AI-Server 응답 결과
+        dict: 처리 결과
     """
     try:
         recommendation_id = request.recommendation_id
@@ -363,7 +367,7 @@ async def confirm_recommendation(request: RecommendationConfirmRequest):
                 detail="confirm은 'YES' 또는 'NO'만 가능합니다"
             )
         
-        logger.info(f"[Recommendations] 📤 사용자 응답을 AI-Server로 전송:")
+        logger.info(f"[Recommendations] 📤 사용자 응답 처리:")
         logger.info(f"  - ID: {recommendation_id}")
         logger.info(f"  - 응답: {confirm}")
         
@@ -372,15 +376,39 @@ async def confirm_recommendation(request: RecommendationConfirmRequest):
         
         if not current_rec or current_rec.get("recommendation_id") != recommendation_id:
             logger.warning(f"⚠️  해당 추천을 찾을 수 없음: {recommendation_id}")
-            # 그래도 AI-Server로 전송 시도
+            return {
+                "success": False,
+                "message": "해당 추천을 찾을 수 없습니다",
+                "recommendation_id": recommendation_id,
+                "confirm": confirm,
+                "timestamp": datetime.now().isoformat()
+            }
         
-        # AI-Server로 confirm 전송
-        from backend.services.ai_client import ai_client
-        
-        confirm_result = await ai_client.send_recommendation_confirm(
-            recommendation_id=recommendation_id,
-            confirm=confirm
-        )
+        # YES 응답인 경우 기기 제어 수행
+        device_control_result = None
+        if confirm == "YES":
+            device_control_info = current_rec.get("device_control")
+            
+            if device_control_info:
+                logger.info(f"[Recommendations] ⚡ YES 응답으로 기기 제어 수행:")
+                logger.info(f"  - 기기: {device_control_info.get('device_name')} ({device_control_info.get('device_id')})")
+                logger.info(f"  - 액션: {device_control_info.get('action')}")
+                
+                # AI-Server로 기기 제어 요청
+                from backend.services.ai_client import ai_client
+                
+                device_control_result = await ai_client.send_device_control(
+                    user_id="default_user",
+                    device_id=device_control_info.get("device_id"),
+                    action=device_control_info.get("action"),
+                    params=device_control_info.get("params")
+                )
+                
+                logger.info(f"✅ 기기 제어 완료: {device_control_result.get('message', '성공')}")
+            else:
+                logger.info(f"ℹ️  YES 응답이지만 device_control 정보 없음")
+        else:
+            logger.info(f"ℹ️  NO 응답: 기기 제어 없음")
         
         # 응답 추적 업데이트
         if recommendation_id in pending_responses:
@@ -388,23 +416,22 @@ async def confirm_recommendation(request: RecommendationConfirmRequest):
             pending_responses[recommendation_id]["user_responded"] = True
             pending_responses[recommendation_id]["response_time"] = time.time()
         
-        logger.info(f"✅ AI-Server 응답: {confirm_result.get('message', '성공')}")
-        
         return {
             "success": True,
             "recommendation_id": recommendation_id,
             "confirm": confirm,
-            "ai_response": confirm_result,
+            "device_control": device_control_result if confirm == "YES" else None,
+            "message": f"추천에 대한 {confirm} 응답을 처리했습니다",
             "timestamp": datetime.now().isoformat()
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[Recommendations] ❌ confirm 전송 실패: {e}", exc_info=True)
+        logger.error(f"[Recommendations] ❌ 응답 처리 실패: {e}", exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"confirm 전송 실패: {str(e)}"
+            detail=f"응답 처리 실패: {str(e)}"
         )
 
 
