@@ -152,23 +152,33 @@ function HomePage({ onLogout }) {
     }, [])
 
     /**
-     * 스마트홈 기기 목록 로드 (Gateway 형식 → Frontend 호환)
+     * 스마트홈 기기 목록 로드 (로컬 DB에서 조회)
      * 
      * Backend 응답 형식:
      * {
      *   "success": true,
      *   "devices": [
      *     {
-     *       "device_id": "aircon_living_room",
+     *       "device_id": "1d7c7408...",
      *       "name": "거실 에어컨",
-     *       "device_type": "aircon",
-     *       "state": "on",
-     *       "metadata": {current_temp, target_temp, ...},
-     *       "source": "gateway_sync"
+     *       "device_type": "air_conditioner",
+     *       "model_name": "LG AC Pro",
+     *       "actions": [
+     *         {
+     *           "id": 1,
+     *           "action_type": "operation",
+     *           "action_name": "POWER_ON",
+     *           "readable": true,
+     *           "writable": true,
+     *           "value_type": "enum",
+     *           "value_range": "[\"POWER_ON\", \"POWER_OFF\"]"
+     *         }
+     *       ],
+     *       "action_count": 42
      *     }
      *   ],
-     *   "count": 3,
-     *   "source": "gateway_sync"
+     *   "count": 5,
+     *   "source": "local_db"
      * }
      */
     const loadDevices = async () => {
@@ -177,36 +187,16 @@ function HomePage({ onLogout }) {
             const data = await response.json()
 
             if (data.success && data.devices) {
-                // ✅ Gateway에서 지원하는 기기 타입 (정규화된 형식)
-                const SUPPORTED_TYPES = ['air_purifier', 'airpurifier', 'dryer', 'air_conditioner', 'aircon']
+                console.log('[HomePage] 기기 목록 로드 성공:', data)
+                console.log('   기기 개수:', data.devices.length)
 
-                // ✅ Backend 응답 형식 → Frontend 호환 형식 변환
-                const transformedDevices = data.devices
-                    .filter(device => SUPPORTED_TYPES.includes(device.device_type))
-                    .map((device, index) => {
-                        // device_type 정규화 (air_purifier → airpurifier, air_conditioner → aircon)
-                        let normalizedType = device.device_type
-                        if (normalizedType === 'air_purifier') normalizedType = 'airpurifier'
-                        if (normalizedType === 'air_conditioner') normalizedType = 'aircon'
+                // ✅ 로컬 DB에서 가져온 기기 데이터를 그대로 사용
+                // device_id, name, device_type, actions[] 포함
+                setDevices(data.devices)
 
-                        // ✅ Backend의 새로운 필드 매핑
-                        return {
-                            id: device.device_id,           // ✅ device_id 사용
-                            device_id: device.device_id,
-                            name: device.name,              // ✅ Backend의 "name" 필드 (alias ❌)
-                            type: normalizedType,
-                            room: device.room || '거실',   // ✅ room 필드 (optional)
-                            state: device.state || 'off',  // ✅ Backend의 "state" 필드 사용 (고정값 ❌)
-                            metadata: device.metadata || {} // ✅ Backend의 메타데이터 사용
-                        }
-                    })
-
-                console.log('[HomePage] 기기 목록 로드 성공 (Gateway 동기화):', transformedDevices)
-                console.log('   기기 개수:', transformedDevices.length)
-                transformedDevices.forEach(device => {
-                    console.log(`   - ${device.name} (${device.type}): state=${device.state}`)
+                data.devices.forEach(device => {
+                    console.log(`   - ${device.name} (${device.device_type}): ${device.action_count}개 액션`)
                 })
-                setDevices(transformedDevices)
             } else {
                 console.warn('기기 목록 응답 형식 오류:', data)
                 setDevices([])
@@ -494,13 +484,9 @@ function HomePage({ onLogout }) {
                         <div className="devices-grid">
                             {devices.map((device) => (
                                 <DeviceCard
-                                    key={device.id}
+                                    key={device.device_id}
                                     device={device}
                                     onControl={handleDeviceControl}
-                                    prolongedBlink={prolongedBlink}
-                                    isPointerLocked={isPointerLocked}
-                                    onPointerEnter={lockPointer}
-                                    isControlling={controllingDevice === device.id}
                                 />
                             ))}
                         </div>

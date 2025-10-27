@@ -140,6 +140,16 @@
     border-radius: var(--radius-md);
 }
 
+.no-actions p {
+    margin: 0 0 var(--spacing-xs) 0;
+}
+
+.no-actions .hint {
+    font-size: 0.75rem;
+    color: var(--gray-400);
+    margin-top: var(--spacing-xs);
+}
+
 /* 로딩 상태 */
 .device-loading {
     position: absolute;

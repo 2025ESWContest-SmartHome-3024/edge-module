@@ -2,6 +2,7 @@
 import logging
 import json
 from typing import Optional, Dict, Any, List
+from datetime import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
@@ -231,9 +232,10 @@ async def handle_device_action(device_id: str, request: DeviceClickRequest):
         logger.info(f"🚀 AI-Services로 제어 요청 중...")
         
         control_result = await ai_client.send_device_control(
+            user_id="default_user",  # 기본 사용자 ID
             device_id=device_id,
             action=action,
-            value=value
+            params={"value": value} if value else None
         )
         
         success = control_result.get("success", True)
