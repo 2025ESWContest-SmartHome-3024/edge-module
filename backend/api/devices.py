@@ -54,7 +54,7 @@ async def sync_devices_from_gateway():
         
         if success:
             # 동기화된 기기 수 계산
-            all_devices = db.get_all_devices()
+            all_devices = db.get_devices()
             total_devices = len(all_devices)
             total_actions = 0
             
@@ -134,7 +134,7 @@ async def get_devices():
         logger.info("� 기기 목록 조회 (Local DB)")
         
         # 1️⃣ 로컬 DB에서 기기 목록 조회
-        devices = db.get_all_devices()
+        devices = db.get_devices()
         
         if not devices:
             logger.warning("⚠️  로컬 DB에 기기가 없음. 먼저 동기화 필요")

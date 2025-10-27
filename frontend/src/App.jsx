@@ -68,10 +68,12 @@ function App() {
             const username = data.username
             localStorage.setItem('gazehome_logged_in', 'true')
             localStorage.setItem('gazehome_username', username)
-            setIsLoggedIn(true)
 
-            // 보정 상태 확인
+            // ✅ 상태 업데이트를 동시에 처리 (React batching)
+            // 이를 통해 중간에 !isCalibrated만 true인 상태 방지
+            setIsLoggedIn(true)
             setIsCalibrated(data.has_calibration)
+
             console.log(`[App] 보정 상태: ${data.has_calibration ? '✅ 보정됨' : '❌ 미보정'}`)
 
         } catch (error) {
@@ -94,21 +96,17 @@ function App() {
             }
             const data = await response.json()
 
-            // 사용자별 보정 파일 존재 확인
-            const userCalibrationFile = `${username}.pkl`
-            const hasUserCalibration = data.calibrations.some(
-                cal => cal.name === userCalibrationFile
-            )
+            // ✅ 보정 파일이 하나라도 존재하면 보정된 것으로 간주
+            // 데모 사용자용 simple logic: 파일이 있으면 보정 완료
+            const hasCalibration = data.calibrations && data.calibrations.length > 0
 
-            setIsCalibrated(hasUserCalibration)
-            console.log(`[App] ${hasUserCalibration ? '✅ 보정 완료' : '❌ 미보정'} - ${username}`)
+            setIsCalibrated(hasCalibration)
+            console.log(`[App] ${hasCalibration ? '✅ 보정 완료' : '❌ 미보정'} (파일: ${data.calibrations?.length || 0}개)`)
         } catch (error) {
             console.error('[App] ⚠️ 보정 상태 확인 실패:', error)
             setIsCalibrated(false)
         }
-    }
-
-    /**
+    }    /**
      * 사용자 로그인 처리 (온보딩 페이지 버튼 클릭 시)
      */
     const handleLogin = async () => {

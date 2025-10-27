@@ -19,16 +19,16 @@ export default defineConfig({
         proxy: {
             '/api': {
                 // REST API 요청을 백엔드 서버로 프록시
-                // 개발: http://127.0.0.1:8000
+                // 개발: http://0.0.0.0:8000
                 // 프로덕션: http://raspberrypi.local:8000
-                target: 'http://127.0.0.1:8000',
+                target: 'http://0.0.0.0:8000',
                 changeOrigin: true,
                 // 요청 경로 유지: /api/users/login → /api/users/login
                 // (경로 재작성 안 함)
             },
             '/api/ws': {
                 // WebSocket 연결을 백엔드 서버로 프록시
-                target: 'ws://127.0.0.1:8000',
+                target: 'ws://0.0.0.0:8000',
                 ws: true,
                 // 요청 경로 유지: /api/ws/gaze → /api/ws/gaze
                 // (경로 재작성 안 함)
