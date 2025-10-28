@@ -75,15 +75,16 @@ git checkout develop
 
 # 6. Virtual Environment 생성
 echo "🐍 Python 가상 환경 생성 중..."
+export PATH="$HOME/.local/bin:$PATH"
 uv venv --python 3.11 --system-site-packages
 
 # 7. 환경 활성화 및 의존성 설치
 echo "📦 의존성 설치 중..."
 source .venv/bin/activate
 
-# MediaPipe-RPI4 설치
+# MediaPipe-RPI4 설치 (venv 내부에서)
 echo "📦 MediaPipe-RPI4 설치 중..."
-pip install mediapipe-rpi4
+.venv/bin/pip install mediapipe-rpi4
 
 # 나머지 의존성 설치
 echo "📦 프로젝트 의존성 설치 중..."
@@ -136,10 +137,15 @@ echo "=================================="
 echo ""
 echo "다음 단계:"
 echo ""
-echo "1. 백엔드 실행:"
+echo "1. 백엔드 실행 (두 가지 방법):"
+echo "   # 방법 1: uv run 사용"
+echo "   cd ~/edge-module"
+echo "   uv run run.py"
+echo ""
+echo "   # 방법 2: venv 직접 사용"
 echo "   cd ~/edge-module"
 echo "   source .venv/bin/activate"
-echo "   uv run run.py"
+echo "   python backend/run.py"
 echo ""
 echo "2. 프론트엔드 실행 (새 터미널):"
 echo "   cd ~/edge-module/frontend"

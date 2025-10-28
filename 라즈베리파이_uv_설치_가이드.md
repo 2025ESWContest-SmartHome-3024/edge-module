@@ -95,8 +95,11 @@ source .venv/bin/activate
 #### 2-5. MediaPipe-RPI4 설치
 
 ```bash
-# venv 내에서 mediapipe-rpi4 설치
-pip install mediapipe-rpi4
+# ⚠️ 중요: venv의 pip을 직접 사용 (externally-managed-environment 오류 방지)
+.venv/bin/pip install mediapipe-rpi4
+
+# 확인
+.venv/bin/python -c "import mediapipe; print(f'✅ MediaPipe {mediapipe.__version__}')"
 ```
 
 #### 2-6. 프로젝트 의존성 설치
@@ -169,17 +172,20 @@ uv pip install -e . --upgrade
 
 ```bash
 cd ~/edge-module
-source .venv/bin/activate
 
-# run.py 실행
+# 방법 1: uv run 사용 (권장)
 uv run run.py
 
-# 또는
+# 방법 2: venv 직접 사용
+source .venv/bin/activate
 python backend/run.py
 
-# 또는 uvicorn 직접 실행
+# 방법 3: uvicorn 직접 실행
+source .venv/bin/activate
 uvicorn backend.api.main:app --host 0.0.0.0 --port 8000
 ```
+
+**💡 참고**: `uv run`은 자동으로 `.venv`를 사용합니다. mediapipe-rpi4가 `.venv/bin/pip`로 설치되었으므로 `uv run`에서도 정상 작동합니다.
 
 ### 프론트엔드 빌드 & 실행
 
@@ -241,33 +247,37 @@ source ~/.bashrc
 python3 -c "import cv2; print(cv2.__version__)"
 
 # venv에서 mediapipe-rpi4 확인
-source .venv/bin/activate
-pip list | grep mediapipe
+.venv/bin/pip list | grep mediapipe
 
-# 재설치
-pip uninstall mediapipe-rpi4
+# 재설치 (venv의 pip 사용)
+.venv/bin/pip uninstall mediapipe-rpi4
+.venv/bin/pip install mediapipe-rpi4
+```
+
+### 3. externally-managed-environment 오류
+
+```bash
+# ❌ 잘못된 방법
+pip install mediapipe-rpi4
+
+# ✅ 올바른 방법 1: venv의 pip 직접 사용
+.venv/bin/pip install mediapipe-rpi4
+
+# ✅ 올바른 방법 2: venv 활성화 후 설치
+source .venv/bin/activate
 pip install mediapipe-rpi4
 ```
 
-### 3. opencv 중복 설치
+### 4. uv run에서 mediapipe를 찾을 수 없음
 
 ```bash
-# opencv-python이 설치되었다면 제거
-pip uninstall opencv-python opencv-contrib-python
+# uv run 테스트
+cd ~/edge-module
+./test_uv_run.sh
 
-# 시스템 패키지만 사용
-python -c "import cv2; print(cv2.__version__)"
-```
-
-### 4. 의존성 충돌
-
-```bash
-# venv 재생성
-rm -rf .venv
-uv venv --python 3.11 --system-site-packages
+# 정상 작동하지 않으면 venv 직접 사용
 source .venv/bin/activate
-pip install mediapipe-rpi4
-uv sync
+python backend/run.py
 ```
 
 ---
