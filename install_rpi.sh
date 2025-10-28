@@ -78,17 +78,32 @@ echo "🐍 Python 가상 환경 생성 중..."
 export PATH="$HOME/.local/bin:$PATH"
 uv venv --python 3.11 --system-site-packages
 
+# venv 생성 확인
+if [ ! -f ".venv/bin/python" ]; then
+    echo "❌ venv 생성 실패. pip를 사용한 기본 venv로 전환합니다..."
+    python3 -m venv .venv --system-site-packages
+fi
+
 # 7. 환경 활성화 및 의존성 설치
 echo "📦 의존성 설치 중..."
 source .venv/bin/activate
 
 # MediaPipe-RPI4 설치 (venv 내부에서)
 echo "📦 MediaPipe-RPI4 설치 중..."
-.venv/bin/pip install mediapipe-rpi4
+if [ -f ".venv/bin/pip" ]; then
+    .venv/bin/pip install mediapipe-rpi4
+else
+    pip install mediapipe-rpi4
+fi
 
 # 나머지 의존성 설치
 echo "📦 프로젝트 의존성 설치 중..."
-uv sync
+if command -v uv &> /dev/null; then
+    uv sync || pip install -r requirements.txt
+else
+    echo "⚠️  uv를 찾을 수 없습니다. requirements.txt로 설치합니다..."
+    pip install -r requirements.txt
+fi
 
 # 8. Node.js 설치 확인
 if ! command -v node &> /dev/null; then
