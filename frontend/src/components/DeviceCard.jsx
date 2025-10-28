@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 import {
     Power, PowerOff, Wind, Sun, Droplets,
-    Thermometer, Fan, Lightbulb, Zap, Repeat, Leaf
+    Thermometer, Fan, Lightbulb, Zap, Repeat, Leaf,
+    Plus, Minus
 } from 'lucide-react'
 import {
     getDeviceActions,
@@ -55,8 +56,15 @@ function DeviceCard({ device, onControl }) {
     const [deviceState, setDeviceState] = useState({})
     const [lastAction, setLastAction] = useState(null)
     const [loading, setLoading] = useState(true)
+    const [currentTemp, setCurrentTemp] = useState(24) // 에어컨 온도 상태 (기본 24도)
     const cardRef = useRef(null)
     const statePollingRef = useRef(null)
+
+    // 👁️ Dwell Time 기능 (2초간 바라보면 토글)
+    const [dwellingButton, setDwellingButton] = useState(null) // 현재 바라보는 버튼
+    const [dwellProgress, setDwellProgress] = useState(0) // 진행률 (0-100)
+    const dwellTimerRef = useRef(null)
+    const DWELL_TIME = 2000 // 2초
 
     // ============================================================================
     // 초기화: 액션 정보 로드
@@ -78,14 +86,20 @@ function DeviceCard({ device, onControl }) {
     const loadActionsForDevice = async () => {
         try {
             setLoading(true)
-            const deviceType = device.device_type.toLowerCase()
+            // device_type에서 'device_' 접두사 제거
+            let deviceType = device.device_type.toLowerCase()
+            if (deviceType.startsWith('device_')) {
+                deviceType = deviceType.replace('device_', '')
+            }
+
+            console.log(`[DeviceCard] 액션 로드 시도: ${device.name}, type: ${deviceType}`)
             const actionsData = await getDeviceActions(deviceType)
 
             if (Object.keys(actionsData).length > 0) {
                 setActions(actionsData)
-                console.log(`[DeviceCard] ✅ 액션 로드: ${device.name}`)
+                console.log(`[DeviceCard] ✅ 액션 로드 성공: ${device.name} (${Object.keys(actionsData).length}개)`)
             } else {
-                console.warn(`[DeviceCard] ⚠️  액션 없음: ${device.name}`)
+                console.warn(`[DeviceCard] ⚠️  액션 없음: ${device.name}, type: ${deviceType}`)
             }
         } catch (error) {
             console.error(`[DeviceCard] ❌ 액션 로드 실패:`, error)
@@ -179,6 +193,65 @@ function DeviceCard({ device, onControl }) {
         }
     }
 
+    /**
+     * 👁️ Dwell Time 시작: 버튼에 시선이 머물 때
+     */
+    const handleButtonEnter = (actionName, actionInfo) => {
+        // 이미 액션 실행 중이거나 다른 버튼에서 dwell 진행 중이면 무시
+        if (isExecuting || dwellingButton) {
+            return
+        }
+
+        console.log(`[DeviceCard] 👁️ Dwell 시작: ${actionName}`)
+        setDwellingButton(actionName)
+        setDwellProgress(0)
+
+        let startTime = Date.now()
+        dwellTimerRef.current = setInterval(() => {
+            const elapsed = Date.now() - startTime
+            const progress = Math.min((elapsed / DWELL_TIME) * 100, 100)
+            setDwellProgress(progress)
+
+            // 2초 완료
+            if (progress >= 100) {
+                clearInterval(dwellTimerRef.current)
+                dwellTimerRef.current = null
+                console.log(`[DeviceCard] ✅ Dwell 완료: ${actionName}`)
+
+                // 온도 조절 버튼인 경우 actionInfo.callback 실행
+                if (actionInfo?.callback) {
+                    actionInfo.callback()
+                } else {
+                    handleActionClick(actionName, actionInfo)
+                }
+
+                setDwellingButton(null)
+                setDwellProgress(0)
+            }
+        }, 50)
+    }
+
+    /**
+     * 👁️ Dwell Time 취소: 버튼에서 시선이 떠날 때
+     */
+    const handleButtonLeave = () => {
+        if (dwellTimerRef.current) {
+            clearInterval(dwellTimerRef.current)
+            console.log(`[DeviceCard] ❌ Dwell 취소`)
+        }
+        setDwellingButton(null)
+        setDwellProgress(0)
+    }
+
+    // 컴포넌트 언마운트 시 타이머 정리
+    useEffect(() => {
+        return () => {
+            if (dwellTimerRef.current) {
+                clearInterval(dwellTimerRef.current)
+            }
+        }
+    }, [])
+
     // 기기 타입에 맞는 아이콘
     const Icon = DEVICE_ICONS[device.device_type] || Power
 
@@ -235,37 +308,119 @@ function DeviceCard({ device, onControl }) {
                         <p>액션 로드 중...</p>
                     </div>
                 ) : Object.keys(groupedActions).length > 0 ? (
-                    Object.entries(groupedActions).map(([category, categoryActions]) => (
-                        <div key={category} className="action-group">
-                            <h4 className="action-group-title">{getCategoryLabel(category)}</h4>
-                            <div className="action-buttons">
-                                {categoryActions.map((action) => {
-                                    const ActionIcon = ACTION_ICON_MAP[action.icon] || Zap
-                                    const actionColor = getActionColor(action.type)
-                                    const isActive = lastAction?.name === action.name && lastAction?.status === 'success'
-
-                                    return (
+                    Object.entries(groupedActions).map(([category, categoryActions]) => {
+                        // 온도 카테고리는 +/- 버튼으로 렌더링
+                        if (category === 'temperature') {
+                            return (
+                                <div key={category} className="action-group">
+                                    <h4 className="action-group-title">{getCategoryLabel(category)}</h4>
+                                    <div className="temperature-control">
                                         <motion.button
-                                            key={action.name}
-                                            className={`action-button ${isActive ? 'active' : ''}`}
-                                            onClick={() => handleActionClick(action.name, action)}
-                                            disabled={isExecuting}
-                                            whileHover={{ scale: isExecuting ? 1 : 1.05 }}
-                                            whileTap={{ scale: isExecuting ? 1 : 0.95 }}
-                                            style={{
-                                                borderColor: actionColor,
-                                                backgroundColor: isActive ? actionColor + '20' : 'transparent',
+                                            className={`temp-button ${dwellingButton === 'temp_minus' ? 'dwelling' : ''}`}
+                                            onMouseEnter={() => {
+                                                const newTemp = Math.max(18, currentTemp - 1)
+                                                handleButtonEnter('temp_minus', {
+                                                    callback: () => {
+                                                        setCurrentTemp(newTemp)
+                                                        handleActionClick(`temp_${newTemp}`, { name: `${newTemp}°C`, type: 'temperature' })
+                                                    }
+                                                })
                                             }}
-                                            title={action.description}
+                                            onMouseLeave={handleButtonLeave}
+                                            disabled={isExecuting || currentTemp <= 18}
+                                            whileHover={{ scale: isExecuting || currentTemp <= 18 ? 1 : 1.1 }}
+                                            whileTap={{ scale: isExecuting || currentTemp <= 18 ? 1 : 0.9 }}
+                                            style={{
+                                                background: dwellingButton === 'temp_minus'
+                                                    ? `linear-gradient(to right, var(--primary) ${dwellProgress}%, transparent ${dwellProgress}%)`
+                                                    : 'transparent'
+                                            }}
                                         >
-                                            <ActionIcon size={16} />
-                                            <span>{action.name}</span>
+                                            <Minus size={20} />
                                         </motion.button>
-                                    )
-                                })}
+
+                                        <div className="temp-display">
+                                            <Thermometer size={24} />
+                                            <span className="temp-value">{currentTemp}°C</span>
+                                        </div>
+
+                                        <motion.button
+                                            className={`temp-button ${dwellingButton === 'temp_plus' ? 'dwelling' : ''}`}
+                                            onMouseEnter={() => {
+                                                const newTemp = Math.min(30, currentTemp + 1)
+                                                handleButtonEnter('temp_plus', {
+                                                    callback: () => {
+                                                        setCurrentTemp(newTemp)
+                                                        handleActionClick(`temp_${newTemp}`, { name: `${newTemp}°C`, type: 'temperature' })
+                                                    }
+                                                })
+                                            }}
+                                            onMouseLeave={handleButtonLeave}
+                                            disabled={isExecuting || currentTemp >= 30}
+                                            whileHover={{ scale: isExecuting || currentTemp >= 30 ? 1 : 1.1 }}
+                                            whileTap={{ scale: isExecuting || currentTemp >= 30 ? 1 : 0.9 }}
+                                            style={{
+                                                background: dwellingButton === 'temp_plus'
+                                                    ? `linear-gradient(to right, var(--primary) ${dwellProgress}%, transparent ${dwellProgress}%)`
+                                                    : 'transparent'
+                                            }}
+                                        >
+                                            <Plus size={20} />
+                                        </motion.button>
+                                    </div>
+                                </div>
+                            )
+                        }
+
+                        // 나머지 카테고리는 기존대로 버튼 렌더링
+                        return (
+                            <div key={category} className="action-group">
+                                <h4 className="action-group-title">{getCategoryLabel(category)}</h4>
+                                <div className="action-buttons">
+                                    {categoryActions.map((action) => {
+                                        const ActionIcon = ACTION_ICON_MAP[action.icon] || Zap
+                                        const actionColor = getActionColor(action.type)
+                                        const isActive = lastAction?.name === action.name && lastAction?.status === 'success'
+                                        const isDwelling = dwellingButton === action.name
+
+                                        return (
+                                            <motion.button
+                                                key={action.name}
+                                                className={`action-button ${isActive ? 'active' : ''} ${isDwelling ? 'dwelling' : ''}`}
+                                                onMouseEnter={() => handleButtonEnter(action.name, action)}
+                                                onMouseLeave={handleButtonLeave}
+                                                disabled={isExecuting}
+                                                whileHover={{ scale: isExecuting ? 1 : 1.05 }}
+                                                whileTap={{ scale: isExecuting ? 1 : 0.95 }}
+                                                style={{
+                                                    borderColor: actionColor,
+                                                    backgroundColor: isActive ? actionColor + '20' : 'transparent',
+                                                    background: isDwelling
+                                                        ? `linear-gradient(to right, ${actionColor}40 ${dwellProgress}%, transparent ${dwellProgress}%)`
+                                                        : isActive ? actionColor + '20' : 'transparent'
+                                                }}
+                                                title={action.description}
+                                            >
+                                                <ActionIcon size={16} />
+                                                <span>{action.name}</span>
+                                                {isDwelling && (
+                                                    <span className="dwell-indicator" style={{
+                                                        position: 'absolute',
+                                                        bottom: '2px',
+                                                        left: '0',
+                                                        height: '3px',
+                                                        width: `${dwellProgress}%`,
+                                                        backgroundColor: actionColor,
+                                                        transition: 'width 50ms linear'
+                                                    }}></span>
+                                                )}
+                                            </motion.button>
+                                        )
+                                    })}
+                                </div>
                             </div>
-                        </div>
-                    ))
+                        )
+                    })
                 ) : (
                     <div className="no-actions">
                         <p>사용 가능한 액션이 없습니다</p>

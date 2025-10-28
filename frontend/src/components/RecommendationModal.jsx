@@ -45,6 +45,12 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     // 이전 prolongedBlink 상태 추적 (상태 변화 감지용)
     const prevBlinkRef = useRef(false)
 
+    // 👁️ Dwell Time 기능 (2초간 바라보면 토글)
+    const [dwellingButton, setDwellingButton] = useState(null) // 'accept' 또는 'reject'
+    const [dwellProgress, setDwellProgress] = useState(0) // 진행률 (0-100)
+    const dwellTimerRef = useRef(null)
+    const DWELL_TIME = 2000 // 2초
+
     // 최상위 추천 (우선순위 최고)
     const topRecommendation = recommendations[0]
 
@@ -117,16 +123,62 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
         callback()
     }
 
-    // 컴포넌트 언마운트시 타이머 정리
-    const cleanup = () => {
-        if (lockTimerRef.current) {
-            clearTimeout(lockTimerRef.current)
-        }
+    /**
+     * 👁️ Dwell Time 시작: 버튼에 시선이 머물 때
+     */
+    const handleButtonEnter = (buttonType, callback, accepted) => {
+        if (isLocked) return
+
+        console.log(`[RecommendationModal] 👁️ Dwell 시작: ${buttonType}`)
+        setDwellingButton(buttonType)
+        setDwellProgress(0)
+
+        let startTime = Date.now()
+        dwellTimerRef.current = setInterval(() => {
+            const elapsed = Date.now() - startTime
+            const progress = Math.min((elapsed / DWELL_TIME) * 100, 100)
+            setDwellProgress(progress)
+
+            // 2초 완료
+            if (progress >= 100) {
+                clearInterval(dwellTimerRef.current)
+                console.log(`[RecommendationModal] ✅ Dwell 완료: ${buttonType}`)
+                handleButtonClick(callback, accepted)
+                setDwellingButton(null)
+                setDwellProgress(0)
+            }
+        }, 50)
     }
+
+    /**
+     * 👁️ Dwell Time 취소: 버튼에서 시선이 떠날 때
+     */
+    const handleButtonLeave = () => {
+        if (dwellTimerRef.current) {
+            clearInterval(dwellTimerRef.current)
+            console.log(`[RecommendationModal] ❌ Dwell 취소`)
+        }
+        setDwellingButton(null)
+        setDwellProgress(0)
+    }
+
+    // 컴포넌트 언마운트시 타이머 정리
+    useEffect(() => {
+        return () => {
+            if (lockTimerRef.current) {
+                clearTimeout(lockTimerRef.current)
+            }
+            if (dwellTimerRef.current) {
+                clearInterval(dwellTimerRef.current)
+            }
+        }
+    }, [])
 
     /**
      * 👁️ 눈깜빡임 감지 - 모달 내 버튼 클릭
      * prolongedBlink가 false → true 전환 감지 (깜빡임 완료)
+     * 
+     * 주의: 이 기능은 dwell time과 별개로 작동 (눈깜빡임으로 즉시 실행)
      */
     useEffect(() => {
         if (isLocked) return
@@ -226,32 +278,58 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                     {/* 액션 버튼 - YES / NO */}
                     <div className="modal-actions">
                         <button
-                            className="action-button accept"
-                            onClick={() => handleButtonClick(() => onAccept(topRecommendation), true)}
+                            className={`action-button accept ${dwellingButton === 'accept' ? 'dwelling' : ''}`}
+                            onMouseEnter={() => handleButtonEnter('accept', () => onAccept(topRecommendation), true)}
+                            onMouseLeave={handleButtonLeave}
                             disabled={isLocked}
-                            onMouseEnter={() => {
-                                if (!isLocked && onPointerEnter) {
-                                    console.log(`[RecommendationModal Button] 🔒 YES 버튼 - 포인터 고정`)
-                                    onPointerEnter(1500)
-                                }
+                            style={{
+                                position: 'relative',
+                                overflow: 'hidden',
+                                background: dwellingButton === 'accept'
+                                    ? `linear-gradient(to right, var(--success) ${dwellProgress}%, transparent ${dwellProgress}%)`
+                                    : ''
                             }}
                         >
                             <CheckCircle size={20} />
                             👍 수락
+                            {dwellingButton === 'accept' && (
+                                <span style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: 0,
+                                    height: '4px',
+                                    width: `${dwellProgress}%`,
+                                    backgroundColor: 'var(--success)',
+                                    transition: 'width 50ms linear'
+                                }}></span>
+                            )}
                         </button>
                         <button
-                            className="action-button reject"
-                            onClick={() => handleButtonClick(() => onClose(), false)}
+                            className={`action-button reject ${dwellingButton === 'reject' ? 'dwelling' : ''}`}
+                            onMouseEnter={() => handleButtonEnter('reject', () => onClose(), false)}
+                            onMouseLeave={handleButtonLeave}
                             disabled={isLocked}
-                            onMouseEnter={() => {
-                                if (!isLocked && onPointerEnter) {
-                                    console.log(`[RecommendationModal Button] 🔒 NO 버튼 - 포인터 고정`)
-                                    onPointerEnter(1500)
-                                }
+                            style={{
+                                position: 'relative',
+                                overflow: 'hidden',
+                                background: dwellingButton === 'reject'
+                                    ? `linear-gradient(to right, var(--danger) ${dwellProgress}%, transparent ${dwellProgress}%)`
+                                    : ''
                             }}
                         >
                             <AlertCircle size={20} />
                             👋 거절
+                            {dwellingButton === 'reject' && (
+                                <span style={{
+                                    position: 'absolute',
+                                    bottom: 0,
+                                    left: 0,
+                                    height: '4px',
+                                    width: `${dwellProgress}%`,
+                                    backgroundColor: 'var(--danger)',
+                                    transition: 'width 50ms linear'
+                                }}></span>
+                            )}
                         </button>
                     </div>
                 </div>

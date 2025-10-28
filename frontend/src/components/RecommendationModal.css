@@ -158,6 +158,8 @@
     background: linear-gradient(135deg, var(--primary), var(--secondary));
     color: white;
     box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
 }
 
 .action-button.accept:hover:not(:disabled) {
@@ -170,10 +172,30 @@
     cursor: not-allowed;
 }
 
+/* 👁️ Dwell Time 진행 중 수락 버튼 */
+.action-button.accept.dwelling {
+    animation: pulse-green 1s ease-in-out infinite;
+    box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.4);
+}
+
+@keyframes pulse-green {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.03);
+    }
+}
+
 .action-button.reject {
     background: linear-gradient(135deg, #EF4444, #DC2626);
     color: white;
     box-shadow: var(--shadow-md);
+    position: relative;
+    overflow: hidden;
 }
 
 .action-button.reject:hover:not(:disabled) {
@@ -184,6 +206,24 @@
 .action-button.reject:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+/* 👁️ Dwell Time 진행 중 거절 버튼 */
+.action-button.reject.dwelling {
+    animation: pulse-red 1s ease-in-out infinite;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.4);
+}
+
+@keyframes pulse-red {
+
+    0%,
+    100% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(1.03);
+    }
 }
 
 .action-button.dismiss {

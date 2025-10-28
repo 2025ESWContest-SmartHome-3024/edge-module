@@ -26,11 +26,13 @@ export default defineConfig({
                 // 요청 경로 유지: /api/users/login → /api/users/login
                 // (경로 재작성 안 함)
             },
-            '/api/ws': {
+            '/ws': {
                 // WebSocket 연결을 백엔드 서버로 프록시
+                // /ws/features, /ws/gaze 등 모든 WebSocket 경로
                 target: 'ws://0.0.0.0:8000',
                 ws: true,
-                // 요청 경로 유지: /api/ws/gaze → /api/ws/gaze
+                changeOrigin: true,
+                // 요청 경로 유지: /ws/features → /ws/features
                 // (경로 재작성 안 함)
             },
         },

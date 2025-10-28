@@ -170,8 +170,8 @@ class GazeEstimator:
         Args:
             path (str): 모델을 저장할 파일 경로
         """
-        with open(path, "wb") as f:
-            pickle.dump(self.model, f)
+        # BaseModel의 save() 메서드 사용 (전체 모델 객체 저장)
+        self.model.save(path)
 
     def load_model(self, path):
         """
@@ -180,8 +180,9 @@ class GazeEstimator:
         Args:
             path (str): 저장된 모델 파일 경로
         """
-        with open(path, "rb") as f:
-            self.model = pickle.load(f)
+        # BaseModel의 load() 클래스 메서드 사용 (전체 모델 객체 로드)
+        from model.models.base import BaseModel
+        self.model = BaseModel.load(path)
 
     def train(self, X, y, variable_scaling=False):
         """

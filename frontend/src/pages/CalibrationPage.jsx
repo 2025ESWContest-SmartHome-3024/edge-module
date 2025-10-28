@@ -34,6 +34,11 @@ function CalibrationPage({ onComplete }) {
     // 사용자 메시지
     const [message, setMessage] = useState('보정을 시작하려면 준비 버튼을 누르세요')
 
+    // 👁️ 얼굴 인식 실패 감지 및 경고
+    const [noFaceWarning, setNoFaceWarning] = useState(false)
+    const noFaceTimerRef = useRef(null)
+    const NO_FACE_TIMEOUT = 10000 // 10초 동안 얼굴 인식 안되면 경고
+
     // WebSocket 참조
     const wsRef = useRef(null)
     const canvasRef = useRef(null)
@@ -61,8 +66,76 @@ function CalibrationPage({ onComplete }) {
             if (captureTimerRef.current) {
                 clearTimeout(captureTimerRef.current)
             }
+            if (noFaceTimerRef.current) {
+                clearTimeout(noFaceTimerRef.current)
+            }
         }
     }, [])
+
+    /**
+     * 👁️ 얼굴 인식 실패 감지 타이머
+     * - 보정 중에 10초 이상 얼굴이 인식되지 않으면 경고 팝업
+     */
+    useEffect(() => {
+        // 보정 중일 때만 감지
+        if (status !== 'calibrating' && status !== 'tuning') {
+            return
+        }
+
+        if (hasFace) {
+            // 얼굴 인식되면 타이머 리셋
+            if (noFaceTimerRef.current) {
+                clearTimeout(noFaceTimerRef.current)
+                noFaceTimerRef.current = null
+            }
+            setNoFaceWarning(false)
+        } else {
+            // 얼굴 인식 안되면 타이머 시작
+            if (!noFaceTimerRef.current) {
+                noFaceTimerRef.current = setTimeout(() => {
+                    console.log('[CalibrationPage] ⚠️ 얼굴 인식 실패 - 경고 표시')
+                    setNoFaceWarning(true)
+
+                    // 3초 후 자동으로 보정 재시작
+                    setTimeout(() => {
+                        handleWarningConfirm()
+                    }, 3000)
+                }, NO_FACE_TIMEOUT)
+            }
+        }
+
+        return () => {
+            if (noFaceTimerRef.current) {
+                clearTimeout(noFaceTimerRef.current)
+                noFaceTimerRef.current = null
+            }
+        }
+    }, [hasFace, status])    /**
+     * 경고 팝업 확인 - 보정 재시작
+     */
+    const handleWarningConfirm = () => {
+        console.log('[CalibrationPage] 얼굴 인식 실패 - 보정 재시작')
+
+        // 경고 상태 초기화
+        setNoFaceWarning(false)
+
+        // WebSocket 종료
+        if (wsRef.current) {
+            wsRef.current.close()
+            wsRef.current = null
+        }
+
+        // 타이머 정리
+        if (captureTimerRef.current) {
+            clearTimeout(captureTimerRef.current)
+            captureTimerRef.current = null
+        }
+
+        // 보정 다시 시작
+        setTimeout(() => {
+            startCalibration()
+        }, 1000)
+    }
 
     /**
      * 보정 세션 시작
@@ -135,20 +208,26 @@ function CalibrationPage({ onComplete }) {
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data)
 
-            console.log('[CalibrationPage] WebSocket 메시지:', data.type, {
-                has_face: data.has_face,
-                blink: data.blink,
-                has_features: !!data.features,
-                phase: phaseRef.current
-            })
+            // 로그 레벨 조정 - capturing 단계에서만 상세 로그
+            if (phaseRef.current === 'capturing') {
+                console.log('[CalibrationPage] 📡 WebSocket 메시지:', {
+                    type: data.type,
+                    has_face: data.has_face,
+                    blink: data.blink,
+                    has_features: !!data.features,
+                    phase: phaseRef.current,
+                    current_point: currentPointIndexRef.current,
+                    samples_count: samplesBufferRef.current[currentPointIndexRef.current]?.length || 0
+                })
+            }
 
             if (data.type === 'features') {
                 // 얼굴 인식 상태 업데이트 (깜빡임 제외)
-                setHasFace(data.has_face && !data.blink)
+                const faceDetected = data.has_face && !data.blink
+                setHasFace(faceDetected)
 
                 // 캡처 단계에서만 샘플 수집
-                if (phaseRef.current === 'capturing' && data.has_face && !data.blink && data.features) {
-                    console.log('[CalibrationPage] 샘플 수집 중...')
+                if (phaseRef.current === 'capturing' && faceDetected && data.features) {
                     collectSample(data.features)
                 }
             }
@@ -171,17 +250,22 @@ function CalibrationPage({ onComplete }) {
      * - 캡처 시간 후 자동으로 다음 포인트로 이동
      */
     const startPulseAnimation = () => {
+        const idx = currentPointIndexRef.current
+        console.log(`[CalibrationPage] 🎯 펄스 시작: 포인트 ${idx}`)
+
         setPhase('pulsing')
         phaseRef.current = 'pulsing'
         setSamplesCollected(0)
 
         // 1초 펄스, 그 후 캡처 시작
         setTimeout(() => {
+            console.log(`[CalibrationPage] 📸 캡처 시작: 포인트 ${idx}`)
             setPhase('capturing')
             phaseRef.current = 'capturing'
 
             // 캡처 시간 후 자동으로 다음 포인트로 이동
             captureTimerRef.current = setTimeout(() => {
+                console.log(`[CalibrationPage] ⏰ 캡처 시간 완료: 포인트 ${idx}`)
                 moveToNextPoint()
             }, captureTimeSeconds * 1000)
         }, 1000)
@@ -195,13 +279,12 @@ function CalibrationPage({ onComplete }) {
         const idx = currentPointIndexRef.current
         const pts = pointsRef.current
 
-        if (phaseRef.current !== 'capturing' || !pts[idx]) {
-            console.log('[CalibrationPage] 샘플 수집 불가:', {
-                phase: phaseRef.current,
-                hasPoint: !!pts[idx],
-                idx: idx,
-                totalPoints: pts.length
-            })
+        if (phaseRef.current !== 'capturing') {
+            return
+        }
+
+        if (!pts[idx]) {
+            console.error('[CalibrationPage] ❌ 포인트 없음:', idx, '/', pts.length)
             return
         }
 
@@ -213,7 +296,8 @@ function CalibrationPage({ onComplete }) {
         }
 
         // 포인트당 샘플 수 제한
-        if (samplesBufferRef.current[idx].length >= samplesPerPoint) {
+        const currentCount = samplesBufferRef.current[idx].length
+        if (currentCount >= samplesPerPoint) {
             return
         }
 
@@ -224,7 +308,11 @@ function CalibrationPage({ onComplete }) {
         })
 
         const count = samplesBufferRef.current[idx].length
-        console.log(`[CalibrationPage] 샘플 ${count}개 수집 (포인트 ${idx})`)
+
+        // 5개마다 로그 (너무 많은 로그 방지)
+        if (count % 5 === 0 || count === 1 || count === samplesPerPoint) {
+            console.log(`[CalibrationPage] ✅ 샘플 수집: ${count}/${samplesPerPoint} (포인트 ${idx})`)
+        }
 
         // UI 카운터 업데이트
         setSamplesCollected(count)
@@ -280,14 +368,15 @@ function CalibrationPage({ onComplete }) {
 
         // 이 포인트의 버퍼링된 샘플들 전송
         const samples = samplesBufferRef.current[idx] || []
-        console.log(`포인트 ${idx}에서 ${samples.length}개 샘플 전송`)
+        console.log(`[CalibrationPage] 포인트 ${idx}에서 ${samples.length}개 샘플 수집됨`)
 
-        if (samples.length < 3) {
-            console.warn(`포인트 ${idx}에서 ${samples.length}개 샘플만 수집됨 - 재시도...`)
-            // 샘플이 부족하면 더 기다림
-            captureTimerRef.current = setTimeout(() => {
-                moveToNextPoint()
-            }, 1000)
+        if (samples.length < 5) {
+            console.warn(`[CalibrationPage] ⚠️ 포인트 ${idx}에서 샘플 부족 (${samples.length}개) - 다시 수집`)
+            // 샘플 버퍼 초기화하고 다시 수집
+            samplesBufferRef.current[idx] = []
+            setSamplesCollected(0)
+            // 펄스 애니메이션부터 다시 시작
+            startPulseAnimation()
             return
         }
 
@@ -324,15 +413,22 @@ function CalibrationPage({ onComplete }) {
             })
 
             const data = await response.json()
+            console.log(`[CalibrationPage] next-point 응답:`, data)
 
             if (data.has_next) {
                 const newIdx = idx + 1
+                console.log(`[CalibrationPage] ✅ 다음 포인트로 이동: ${idx} → ${newIdx}`)
                 setCurrentPointIndex(newIdx)
                 currentPointIndexRef.current = newIdx
                 setSamplesCollected(0)
+                // 샘플 버퍼 초기화
+                if (samplesBufferRef.current[newIdx]) {
+                    samplesBufferRef.current[newIdx] = []
+                }
                 startPulseAnimation()
                 setMessage(`포인트 ${newIdx + 1} / ${pointsRef.current.length}`)
             } else {
+                console.log('[CalibrationPage] ✅ 모든 포인트 수집 완료')
                 // 모든 포인트 수집 완료
                 if (status === 'tuning') {
                     // 튜닝 완료
@@ -345,7 +441,12 @@ function CalibrationPage({ onComplete }) {
             }
 
         } catch (error) {
-            console.error('다음 포인트 이동 실패:', error)
+            console.error('[CalibrationPage] ❌ 다음 포인트 이동 실패:', error)
+            // 오류 발생 시 다시 시도
+            setMessage('포인트 이동 실패 - 다시 시도 중...')
+            setTimeout(() => {
+                startPulseAnimation()
+            }, 2000)
         }
     }
 
@@ -590,6 +691,41 @@ function CalibrationPage({ onComplete }) {
                             </div>
                             <div className="message">{message}</div>
                         </div>
+
+                        {/* 👁️ 얼굴 인식 실패 경고 팝업 */}
+                        {noFaceWarning && (
+                            <motion.div
+                                className="warning-overlay"
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                            >
+                                <motion.div
+                                    className="warning-modal"
+                                    initial={{ scale: 0.9, opacity: 0 }}
+                                    animate={{ scale: 1, opacity: 1 }}
+                                    exit={{ scale: 0.9, opacity: 0 }}
+                                >
+                                    <div className="warning-icon">
+                                        <AlertCircle size={48} color="#EF4444" />
+                                    </div>
+                                    <h2>시선 인식 실패</h2>
+                                    <p>카메라에서 얼굴을 인식할 수 없습니다.</p>
+                                    <ul className="warning-tips">
+                                        <li>조명이 충분한 곳에서 시도해주세요</li>
+                                        <li>카메라를 정면으로 바라봐주세요</li>
+                                        <li>얼굴이 화면 중앙에 위치하도록 조정해주세요</li>
+                                        <li>안경이나 모자를 착용하셨다면 벗어주세요</li>
+                                    </ul>
+                                    <p className="auto-restart-message">
+                                        3초 후 자동으로 보정을 다시 시작합니다...
+                                    </p>
+                                    <button className="warning-button" onClick={handleWarningConfirm}>
+                                        지금 다시 시작
+                                    </button>
+                                </motion.div>
+                            </motion.div>
+                        )}
                     </motion.div>
                 )}
 
