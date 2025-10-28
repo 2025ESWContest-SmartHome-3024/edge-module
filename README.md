@@ -72,6 +72,69 @@ npm run dev
 3. 캘리브레이션 수행 (9포인트)
 4. 홈 화면에서 시선으로 기기 제어
 
+## 테스트 및 디버깅
+
+### DB 상태 확인
+```bash
+# 현재 DB 상태, 보정 파일, 기기 목록 확인
+uv run check_db_status.py
+# 또는
+python check_db_status.py
+```
+
+### 보정 데이터만 초기화 (기기 데이터 유지)
+```bash
+# calibrations 테이블 + .pkl 파일만 삭제
+# 기기 목록 및 액션은 그대로 유지
+uv run reset_calibration.py
+# 또는
+python reset_calibration.py
+```
+
+**사용 시나리오**:
+- 보정을 다시 테스트하고 싶을 때
+- 기기 2개는 그대로 사용하면서 보정만 초기화할 때
+- DB의 기기/액션 데이터는 유지하면서 온보딩 플로우 테스트
+
+### 전체 데이터 초기화
+```bash
+# DB 파일 완전 삭제 + 모든 보정 파일 삭제
+uv run reset_all_data.py
+# 또는
+python reset_all_data.py
+```
+
+**사용 시나리오**:
+- 완전히 처음부터 다시 시작할 때
+- DB 스키마 변경 후 재생성 필요할 때
+- 다음 실행 시 모든 데이터가 자동으로 재생성됨
+
+### 테스트 워크플로우
+
+```bash
+# 1. 현재 상태 확인
+uv run check_db_status.py
+
+# 2. 보정만 초기화 (기기 유지)
+uv run reset_calibration.py
+
+# 3. 백엔드/프론트엔드 재시작
+# 백엔드
+uv run run.py
+
+# 프론트엔드
+cd frontend && npm run dev
+
+# 4. 테스트 진행
+#    - 온보딩 페이지에서 시작
+#    - 보정 진행
+#    - 기기 2개로 제어 테스트
+#    - AI 추천 수신 테스트
+
+# 5. 다시 상태 확인
+uv run check_db_status.py
+```
+
 ## API 문서
 
 실행 중인 서버의 `/docs` 또는 `/redoc` 에서 Swagger UI 또는 ReDoc 확인 가능
