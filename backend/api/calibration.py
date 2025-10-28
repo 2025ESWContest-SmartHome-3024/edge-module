@@ -412,9 +412,9 @@ async def complete_calibration(request: CalibrationCompleteRequest):
         
         gaze_tracker.save_calibration(save_path)
         
-        # 데이터베이스에 캘리브레이션 기록
+        # 데이터베이스에 캘리브레이션 기록 (✅ 절대 경로 저장)
         db.add_calibration(
-            calibration_file=f"{username}.pkl",
+            calibration_file=save_path,  # ✅ 절대 경로로 저장
             method=session.method.value
         )
         

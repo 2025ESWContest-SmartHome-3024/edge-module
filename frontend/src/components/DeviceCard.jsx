@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import {
     Power, PowerOff, Wind, Sun, Droplets,
     Thermometer, Fan, Lightbulb, Zap, Repeat, Leaf,
-    Plus, Minus
+    Plus, Minus, RefreshCw
 } from 'lucide-react'
 import {
     getDeviceActions,
@@ -71,7 +71,7 @@ function DeviceCard({ device, onControl }) {
     // ============================================================================
     useEffect(() => {
         loadActionsForDevice()
-        pollDeviceState()
+        fetchDeviceState() // ✅ 함수명 수정
 
         return () => {
             if (statePollingRef.current) {
@@ -109,10 +109,11 @@ function DeviceCard({ device, onControl }) {
     }
 
     /**
-     * 기기 상태 폴링 (5초마다)
+     * 기기 상태 수동 조회 (새로고침 버튼 클릭 시)
      */
-    const pollDeviceState = async () => {
+    const fetchDeviceState = async () => {
         try {
+            console.log(`[DeviceCard] 🔄 상태 조회 중: ${device.name}`)
             const response = await fetch(`/api/devices/${device.device_id}/state`)
             const data = await response.json()
 
@@ -125,15 +126,7 @@ function DeviceCard({ device, onControl }) {
         }
     }
 
-    // 상태 폴링 시작
-    useEffect(() => {
-        statePollingRef.current = setInterval(pollDeviceState, 5000)
-        return () => {
-            if (statePollingRef.current) {
-                clearInterval(statePollingRef.current)
-            }
-        }
-    }, [device.device_id])
+    // 자동 폴링 제거 - 수동 새로고침만 사용
 
     /**
      * 액션 실행 핸들러
@@ -167,7 +160,7 @@ function DeviceCard({ device, onControl }) {
                 })
 
                 // 즉시 상태 업데이트
-                await pollDeviceState()
+                await fetchDeviceState() // ✅ 함수명 수정
 
                 // 부모 컴포넌트에 알림
                 if (onControl) {
@@ -299,6 +292,17 @@ function DeviceCard({ device, onControl }) {
                     <p className="device-type">{device.device_type}</p>
                     <p className="device-state">{getStateDisplay()}</p>
                 </div>
+
+                {/* 새로고침 버튼 */}
+                <motion.button
+                    className="refresh-button"
+                    onClick={fetchDeviceState}
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.95 }}
+                    title="상태 새로고침"
+                >
+                    <RefreshCw size={24} />
+                </motion.button>
             </div>
 
             {/* 액션 섹션 */}
@@ -380,14 +384,14 @@ function DeviceCard({ device, onControl }) {
                                     {categoryActions.map((action) => {
                                         const ActionIcon = ACTION_ICON_MAP[action.icon] || Zap
                                         const actionColor = getActionColor(action.type)
-                                        const isActive = lastAction?.name === action.name && lastAction?.status === 'success'
-                                        const isDwelling = dwellingButton === action.name
+                                        const isActive = lastAction?.name === action.action && lastAction?.status === 'success'
+                                        const isDwelling = dwellingButton === action.action
 
                                         return (
                                             <motion.button
-                                                key={action.name}
+                                                key={action.action}
                                                 className={`action-button ${isActive ? 'active' : ''} ${isDwelling ? 'dwelling' : ''}`}
-                                                onMouseEnter={() => handleButtonEnter(action.name, action)}
+                                                onMouseEnter={() => handleButtonEnter(action.action, action)}
                                                 onMouseLeave={handleButtonLeave}
                                                 disabled={isExecuting}
                                                 whileHover={{ scale: isExecuting ? 1 : 1.05 }}
@@ -402,7 +406,7 @@ function DeviceCard({ device, onControl }) {
                                                 title={action.description}
                                             >
                                                 <ActionIcon size={16} />
-                                                <span>{action.name}</span>
+                                                <span>{action.label}</span>
                                                 {isDwelling && (
                                                     <span className="dwell-indicator" style={{
                                                         position: 'absolute',

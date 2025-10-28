@@ -230,20 +230,23 @@ async def handle_device_action(device_id: str, request: DeviceClickRequest):
         logger.info(f"   - 기기명: {device_name}")
         logger.info(f"   - 기기타입: {device_type}")
         
-        # 2️⃣ AI-Services로 기기 제어 요청
-        logger.info(f"🚀 AI-Services로 제어 요청 중...")
+        # 2️⃣ Gateway로 직접 기기 제어 요청 (AI-Services 우회)
+        logger.info(f"🚀 Gateway로 직접 제어 요청 중...")
         
-        control_result = await ai_client.send_device_control(
-            user_id="default_user",  # 기본 사용자 ID
+        # Gateway client 사용
+        control_result = await gateway_client.control_device(
             device_id=device_id,
             action=action,
-            params={"value": value} if value else None
+            value=value
         )
         
-        success = control_result.get("success", True)
+        success = control_result.get("success", False)
         message = control_result.get("message", "제어 완료")
         
-        logger.info(f"✅ 제어 결과: {message}")
+        if success:
+            logger.info(f"✅ Gateway 제어 성공: {message}")
+        else:
+            logger.warning(f"⚠️ Gateway 제어 실패: {message}")
         
         # 3️⃣ 액션 성공 후 로컬에 상태 저장 (Gateway 조회 없음)
         if success:

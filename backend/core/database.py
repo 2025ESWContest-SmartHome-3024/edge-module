@@ -222,20 +222,32 @@ class Database:
         """기능: 캘리브레이션 존재 확인.
         
         args: 없음
-        return: 캘리브레이션 유무
+        return: 캘리브레이션 유무 (DB 레코드 + 실제 파일 존재)
         """
+        from pathlib import Path
+        
         calibrations = self.get_calibrations()
-        return len(calibrations) > 0
+        if not calibrations:
+            return False
+        
+        # ✅ DB에 있는 최신 보정 파일이 실제로 존재하는지 확인
+        latest_file = calibrations[0]['calibration_file']
+        return Path(latest_file).exists()
     
     def get_latest_calibration(self) -> Optional[str]:
         """기능: 최신 캘리브레이션 파일 조회.
         
         args: 없음
-        return: 최신 캘리브레이션 파일 경로 또는 None
+        return: 최신 캘리브레이션 파일 경로 또는 None (파일 존재하는 경우만)
         """
+        from pathlib import Path
+        
         calibrations = self.get_calibrations()
-        if calibrations:
-            return calibrations[0]['calibration_file']
+        for calib in calibrations:
+            calib_file = calib['calibration_file']
+            # ✅ 파일이 실제로 존재하는 경우만 반환
+            if Path(calib_file).exists():
+                return calib_file
         return None
     
     # =========================================================================

@@ -28,20 +28,24 @@ function App() {
         // 개발자 도구: 디버그 정보
         console.log('%c💡 GazeHome 애플리케이션 시작', 'background: blue; color: white; padding: 5px 10px; font-weight: bold')
 
-        // localStorage에서 로그인 정보 확인
-        const loggedIn = localStorage.getItem('gazehome_logged_in') === 'true'
-        const username = localStorage.getItem('gazehome_username')
+        const initializeApp = async () => {
+            // localStorage에서 로그인 정보 확인
+            const loggedIn = localStorage.getItem('gazehome_logged_in') === 'true'
+            const username = localStorage.getItem('gazehome_username')
 
-        // 이미 로그인된 경우
-        if (loggedIn && username) {
-            console.log('[App] 💾 localStorage에서 로그인 상태 복원:', username)
-            setIsLoggedIn(true)
-            checkCalibrationStatus(username)
-        } else {
-            // 첫 방문 사용자 - 자동 로그인
-            console.log('[App] 🆕 첫 방문 사용자 - 자동 로그인 시작')
-            handleAutoLogin()
+            // 이미 로그인된 경우
+            if (loggedIn && username) {
+                console.log('[App] 💾 localStorage에서 로그인 상태 복원:', username)
+                setIsLoggedIn(true)
+                await checkCalibrationStatus(username) // ✅ await 추가: 보정 상태 확인 완료 후 렌더링
+            } else {
+                // 첫 방문 사용자 - 자동 로그인
+                console.log('[App] 🆕 첫 방문 사용자 - 자동 로그인 시작')
+                await handleAutoLogin() // ✅ await 추가
+            }
         }
+
+        initializeApp()
     }, [])
 
     /**

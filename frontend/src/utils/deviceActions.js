@@ -153,13 +153,14 @@ export function enrichDeviceWithActions(device, actionsData) {
 export function groupActionsByCategory(actions) {
     const grouped = {}
 
-    Object.entries(actions).forEach(([actionName, actionInfo]) => {
+    Object.entries(actions).forEach(([actionKey, actionInfo]) => {
         const category = actionInfo.category || 'etc'
         if (!grouped[category]) {
             grouped[category] = []
         }
         grouped[category].push({
-            name: actionName,
+            action: actionKey,  // ✅ 실제 액션명 (API 전송용, 영문)
+            label: actionInfo.name,  // ✅ UI 표시용 (한글)
             ...actionInfo,
         })
     })

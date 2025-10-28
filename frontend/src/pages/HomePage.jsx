@@ -41,6 +41,13 @@ function HomePage({ onLogout }) {
     // 🔒 현재 제어 중인 기기 (중복 클릭 방지)
     const [controllingDevice, setControllingDevice] = useState(null)
 
+    // 📄 페이지네이션 제거 - 고정 2개 기기만 표시
+    // 고정 기기 ID (에어컨1, 공기청정기)
+    const FIXED_DEVICE_IDS = [
+        '1d7c7408c31fbaf9ce2ea8634e2eda53f517d835a61440a4f75c5426eadc054a', // 에어컨1
+        '13b708c0aa7f00b62835388f82643ae0cf0470fe24a14754f8d0bcb915513803'  // 공기청정기
+    ]
+
     /**
      * 포인터 1.5초 고정 함수
      * - 버튼 클릭 시 호출
@@ -52,6 +59,13 @@ function HomePage({ onLogout }) {
             setIsPointerLocked(false)
         }, duration)
     }
+
+    /**
+     * 📄 고정 기기만 필터링 (에어컨1, 공기청정기)
+     */
+    const displayDevices = devices.filter(device =>
+        FIXED_DEVICE_IDS.includes(device.device_id)
+    )
 
     /**
      * 초기화: 사용자명 로드, 기기/추천 로드, WebSocket 연결
@@ -268,18 +282,19 @@ function HomePage({ onLogout }) {
             // 추천 메시지 처리 (WebSocket을 통한 백엔드 푸시)
             if (data.type === 'recommendation') {
                 console.log('[HomePage] 추천 수신:', data.title)
-                console.log('[HomePage] 추천 내용:', data.description)
+                console.log('[HomePage] 추천 내용:', data.contents || data.description || data.content)
                 console.log('[HomePage] 추천 시간:', new Date().toLocaleString())
 
                 const recommendation = {
                     id: `rec_ws_${Date.now()}`,
+                    recommendation_id: data.recommendation_id || `rec_ws_${Date.now()}`, // ✅ 백엔드 confirm API용
                     title: data.title,
-                    description: data.description || data.content,
+                    description: data.contents || data.description || data.content, // ✅ contents (복수형) 우선 처리
                     device_id: data.device_id || null,
                     device_name: data.device_name || 'AI 추천',
                     action: data.action || null,
                     params: data.params || {},
-                    reason: data.reason || data.description || data.content,
+                    reason: data.reason || data.contents || data.description || data.content, // ✅ contents 추가
                     priority: data.priority || 3,
                     timestamp: new Date().toISOString()
                 }
@@ -469,7 +484,7 @@ function HomePage({ onLogout }) {
                         <p>시선으로 스마트홈을 제어해보세요</p>
                     </motion.div>
 
-                    {/* 기기 그리드 */}
+                    {/* 기기 그리드 - 고정 2개 기기만 표시 */}
                     <motion.div
                         className="devices-section"
                         initial={{ opacity: 0 }}
@@ -477,12 +492,15 @@ function HomePage({ onLogout }) {
                         transition={{ delay: 0.2 }}
                     >
                         <div className="section-header">
-                            <h2>기기 목록</h2>
-                            <span className="device-count">{devices.length}개 기기</span>
+                            <h2>내 기기</h2>
+                            <span className="device-count">
+                                {displayDevices.length}개 기기
+                            </span>
                         </div>
 
+                        {/* 기기 그리드 - 페이지네이션 제거 */}
                         <div className="devices-grid">
-                            {devices.map((device) => (
+                            {displayDevices.map((device) => (
                                 <DeviceCard
                                     key={device.device_id}
                                     device={device}
@@ -490,6 +508,14 @@ function HomePage({ onLogout }) {
                                 />
                             ))}
                         </div>
+
+                        {/* 기기가 없을 때 안내 메시지 */}
+                        {displayDevices.length === 0 && (
+                            <div className="no-devices-message">
+                                <p>등록된 기기가 없습니다</p>
+                                <p className="hint">에어컨1과 공기청정기를 등록해주세요</p>
+                            </div>
+                        )}
                     </motion.div>
                 </div>
             </main>

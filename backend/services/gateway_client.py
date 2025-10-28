@@ -373,6 +373,100 @@ class GatewayClient:
         logger.error(f"❌ 상태 조회 실패: {device_id}")
         return {"error": "상태 조회 실패"}
     
+    async def control_device(
+        self, 
+        device_id: str, 
+        action: str, 
+        value: Optional[Any] = None
+    ) -> Dict[str, Any]:
+        """기기 제어 명령을 Gateway로 직접 전송.
+        
+        Gateway의 /api/lg/control 엔드포인트를 호출하여 기기를 제어합니다.
+        
+        Args:
+            device_id: 기기 ID
+            action: 액션명 (예: "purifier_on", "temp_25")
+            value: 액션 값 (선택사항)
+        
+        Returns:
+            제어 결과
+            {
+                "success": true/false,
+                "message": "제어 완료" or 에러 메시지,
+                "device_id": "...",
+                "action": "..."
+            }
+        """
+        control_url = f"{self.gateway_url}/api/lg/control"
+        
+        # Gateway control 요청 페이로드
+        payload = {
+            "device_id": device_id,
+            "action": action
+        }
+        
+        if value is not None:
+            payload["value"] = value
+        
+        try:
+            logger.info(f"🎮 Gateway로 기기 제어:")
+            logger.info(f"   - URL: {control_url}")
+            logger.info(f"   - 기기: {device_id}")
+            logger.info(f"   - 액션: {action}")
+            if value:
+                logger.info(f"   - 값: {value}")
+            
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    control_url,
+                    json=payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if response.status_code == 200:
+                    result = response.json()
+                    message = result.get("message", "기기 제어 완료")
+                    
+                    logger.info(f"✅ Gateway 제어 성공: {message}")
+                    
+                    return {
+                        "success": True,
+                        "message": message,
+                        "device_id": device_id,
+                        "action": action
+                    }
+                else:
+                    error_text = response.text
+                    logger.error(f"❌ Gateway 제어 실패:")
+                    logger.error(f"   Status: {response.status_code}")
+                    logger.error(f"   Detail: {error_text}")
+                    
+                    return {
+                        "success": False,
+                        "message": f"Gateway 제어 실패: {error_text}",
+                        "device_id": device_id,
+                        "action": action
+                    }
+                    
+        except httpx.TimeoutException:
+            logger.error(f"❌ Gateway 통신 타임아웃: {device_id}")
+            return {
+                "success": False,
+                "message": f"Gateway 통신 타임아웃 ({self.timeout}초)",
+                "device_id": device_id,
+                "action": action
+            }
+        except Exception as e:
+            logger.error(f"❌ 기기 제어 중 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                "success": False,
+                "message": f"기기 제어 실패: {str(e)}",
+                "device_id": device_id,
+                "action": action
+            }
+    
     @staticmethod
     def _normalize_state(status: str) -> str:
         """상태 정규화 (on/off).
