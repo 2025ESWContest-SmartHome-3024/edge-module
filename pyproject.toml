@@ -52,6 +52,11 @@ dependencies = [
   
   # MQTT (추천 시스템)
   "paho-mqtt>=1.6.1",
+  
+  # 데이터베이스 및 유틸리티
+  "sqlalchemy>=2.0",
+  "python-dotenv>=1.0.0",
+  "aiofiles>=23.0.0",
 ]
 
 [project.urls]
