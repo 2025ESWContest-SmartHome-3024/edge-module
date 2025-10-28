@@ -279,17 +279,17 @@ class AIServiceClient:
             }
     
     # =========================================================================
-    # Recommendation Confirm (사용자 YES/NO 응답을 AI-Server로 전송)
+    # Recommendation Feedback (사용자 YES/NO 응답을 AI-Server로 전송)
     # =========================================================================
     
-    async def send_recommendation_confirm(
+    async def send_recommendation_feedback(
         self,
         recommendation_id: str,
         confirm: str
     ) -> Dict[str, Any]:
         """기능: 사용자의 추천 응답(YES/NO)을 AI-Server로 전송.
         
-        AI-Server의 POST /api/recommendations/confirm 엔드포인트 호출.
+        AI-Server의 POST /api/recommendations/feedback 엔드포인트 호출.
         YES인 경우 AI-Server가 자동으로 기기 제어를 수행합니다.
         
         args:
@@ -298,15 +298,15 @@ class AIServiceClient:
         
         return: AI-Server 응답
         """
-        url = f"{self.base_url}/api/recommendations/confirm"
+        url = f"{self.base_url}/api/recommendations/feedback"
         
         payload = {
             "recommendation_id": recommendation_id,
-            "confirm": confirm
+            "confirm": confirm,
         }
         
         try:
-            logger.info(f"📤 AI-Server로 사용자 응답 전송:")
+            logger.info(f"📤 AI-Server로 피드백 전송:")
             logger.info(f"  - URL: {url}")
             logger.info(f"  - recommendation_id: {recommendation_id}")
             logger.info(f"  - confirm: {confirm}")
@@ -321,7 +321,7 @@ class AIServiceClient:
                 response.raise_for_status()
                 
                 result = response.json()
-                message = result.get("message", "응답 전송 완료")
+                message = result.get("message", "피드백 전송 완료")
                 
                 logger.info(f"✅ AI-Server 응답: {message}")
                 
@@ -338,12 +338,12 @@ class AIServiceClient:
                 }
                 
         except httpx.HTTPStatusError as e:
-            logger.error(f"❌ AI-Server confirm 전송 실패:")
+            logger.error(f"❌ AI-Server 피드백 전송 실패:")
             logger.error(f"   Status: {e.response.status_code}")
             logger.error(f"   Detail: {e.response.text}")
             return {
                 "success": False,
-                "message": f"confirm 전송 실패: {e.response.text}",
+                "message": f"피드백 전송 실패: {e.response.text}",
                 "recommendation_id": recommendation_id,
                 "confirm": confirm
             }
@@ -356,10 +356,10 @@ class AIServiceClient:
                 "confirm": confirm
             }
         except Exception as e:
-            logger.error(f"❌ confirm 전송 중 오류: {e}")
+            logger.error(f"❌ 피드백 전송 중 오류: {e}")
             return {
                 "success": False,
-                "message": f"confirm 전송 실패: {str(e)}",
+                "message": f"피드백 전송 실패: {str(e)}",
                 "recommendation_id": recommendation_id,
                 "confirm": confirm
             }

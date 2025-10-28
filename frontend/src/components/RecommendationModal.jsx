@@ -63,12 +63,12 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     /**
      * 버튼 클릭 핸들러
      * - 포인터 고정 시작
-     * - 피드백 전송 (HTTP POST)
+     * - AI-Server에 YES/NO 응답 전송 (/api/recommendations/confirm)
      * - 콜백 실행
      */
     const handleButtonClick = async (callback, accepted = true) => {
         // 포인터 고정 시작
-        console.log(`[RecommendationModal] 포인터 고정 시작 (${LOCK_DURATION}ms)`)
+        console.log(`[RecommendationModal] 🔒 포인터 고정 시작 (${LOCK_DURATION}ms)`)
         setIsLocked(true)
 
         // 기존 타이머 정리
@@ -78,24 +78,39 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
 
         // 1.5초 후 포인터 고정 해제
         lockTimerRef.current = setTimeout(() => {
-            console.log(`[RecommendationModal] 포인터 고정 해제`)
+            console.log(`[RecommendationModal] 🔓 포인터 고정 해제`)
             setIsLocked(false)
         }, LOCK_DURATION)
 
-        // 모든 추천에 대해 피드백 전송 (HTTP POST)
+        // AI-Server에 사용자 응답 전송
+        // Flow: Frontend → Edge-Module (/api/recommendations/confirm) → AI-Server
         try {
-            await fetch('/api/recommendations/feedback', {
+            const response_text = accepted ? "YES (수락)" : "NO (거절)"
+            console.log(`[RecommendationModal] 📤 AI-Server로 응답 전송: ${response_text}`)
+
+            const response = await fetch('/api/recommendations/confirm', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    recommendation_id: topRecommendation.id,
-                    user_id: localStorage.getItem('gazehome_user_id') || 'user_1',
-                    accepted: accepted
+                    recommendation_id: topRecommendation.recommendation_id,
+                    confirm: accepted ? "YES" : "NO"
                 }),
             })
-            console.log(`[RecommendationModal] 피드백 전송 완료: ${accepted ? 'YES' : 'NO'}`)
+
+            if (response.ok) {
+                const result = await response.json()
+                console.log(`[RecommendationModal] ✅ 응답 전송 완료:`, result)
+
+                if (accepted && result.ai_server_response?.success) {
+                    console.log(`[RecommendationModal] → AI-Server가 기기 제어를 수행합니다`)
+                } else if (!accepted) {
+                    console.log(`[RecommendationModal] → 사용자가 거부했습니다`)
+                }
+            } else {
+                console.error(`[RecommendationModal] ❌ 응답 전송 실패: ${response.status}`)
+            }
         } catch (error) {
-            console.error('[RecommendationModal] 피드백 전송 실패:', error)
+            console.error('[RecommendationModal] ❌ 응답 전송 오류:', error)
         }
 
         // 콜백 실행
@@ -208,7 +223,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                         </div>
                     </div>
 
-                    {/* 액션 버튼 - YES만 표시 (팝업 유지) */}
+                    {/* 액션 버튼 - YES / NO */}
                     <div className="modal-actions">
                         <button
                             className="action-button accept"
@@ -216,7 +231,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             disabled={isLocked}
                             onMouseEnter={() => {
                                 if (!isLocked && onPointerEnter) {
-                                    console.log(`[RecommendationModal Button] 포인터 버튼 진입 - 1.5초 고정`)
+                                    console.log(`[RecommendationModal Button] 🔒 YES 버튼 - 포인터 고정`)
                                     onPointerEnter(1500)
                                 }
                             }}
@@ -224,7 +239,20 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             <CheckCircle size={20} />
                             👍 수락
                         </button>
-                        {/* 거절 버튼은 선택적 - 현재는 수락만 표시 */}
+                        <button
+                            className="action-button reject"
+                            onClick={() => handleButtonClick(() => onClose(), false)}
+                            disabled={isLocked}
+                            onMouseEnter={() => {
+                                if (!isLocked && onPointerEnter) {
+                                    console.log(`[RecommendationModal Button] 🔒 NO 버튼 - 포인터 고정`)
+                                    onPointerEnter(1500)
+                                }
+                            }}
+                        >
+                            <AlertCircle size={20} />
+                            👋 거절
+                        </button>
                     </div>
                 </div>
 

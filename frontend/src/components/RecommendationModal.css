@@ -170,6 +170,22 @@
     cursor: not-allowed;
 }
 
+.action-button.reject {
+    background: linear-gradient(135deg, #EF4444, #DC2626);
+    color: white;
+    box-shadow: var(--shadow-md);
+}
+
+.action-button.reject:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.action-button.reject:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 .action-button.dismiss {
     background: var(--gray-100);
     color: var(--gray-700);

@@ -190,11 +190,12 @@ async def handle_device_action(device_id: str, request: DeviceClickRequest):
     1. 로컬 DB에서 기기 정보 조회
     2. AI-Services로 기기 제어 요청
     3. AI-Services → Gateway → LG ThinQ API
+    4. 액션 성공 후 로컬 DB에 상태 저장 (Gateway 조회 없이)
     
     Args:
         device_id: 기기 ID
         request:
-            - action: 액션명 (예: "POWER_ON_POWER_OFF", "temperature_18")
+            - action: 액션명 (예: "purifier_on", "temp_25")
             - value: 액션 값 (선택사항)
     
     Returns:
@@ -202,7 +203,8 @@ async def handle_device_action(device_id: str, request: DeviceClickRequest):
             "success": true,
             "device_id": "1d7c7408...",
             "device_name": "거실 에어컨",
-            "action": "POWER_ON_POWER_OFF",
+            "device_type": "air_conditioner",
+            "action": "temp_25",
             "message": "제어 성공"
         }
     """
@@ -242,6 +244,18 @@ async def handle_device_action(device_id: str, request: DeviceClickRequest):
         message = control_result.get("message", "제어 완료")
         
         logger.info(f"✅ 제어 결과: {message}")
+        
+        # 3️⃣ 액션 성공 후 로컬에 상태 저장 (Gateway 조회 없음)
+        if success:
+            from backend.services.device_state_manager import device_state_manager
+            
+            logger.info(f"💾 로컬 상태 저장 중...")
+            device_state_manager.update_device_state_from_action(
+                device_id=device_id,
+                action=action,
+                device_type=device_type,
+                value=value
+            )
         
         return {
             "success": success,
@@ -393,33 +407,33 @@ async def get_device_profile(device_id: str):
 # ===============================================================================
 
 @router.get("/{device_id}/state")
-async def get_device_state(device_id: str):
-    """기능: 특정 기기의 실시간 상태 조회.
+async def get_device_state(device_id: str, force_gateway: bool = False):
+    """기능: 특정 기기의 상태 조회.
     
-    Gateway를 통해 LG API에서 기기의 현재 상태를 조회합니다.
+    Flow:
+    1. 초기 로그인 후: Gateway에서 조회 후 로컬 캐시에 저장
+    2. 이후: 로컬 캐시 사용 (TTL 내)
+    3. 캐시 만료 시: 다시 Gateway에서 조회
+    4. force_gateway=true: 강제로 Gateway 조회
     
     Args:
         device_id: 기기 ID
+        force_gateway: Gateway 강제 조회 여부
     
     Returns:
         {
             "success": true,
-            "device_id": "1d7c7408...",
+            "device_id": "device_123",
             "name": "거실 에어컨",
             "device_type": "air_conditioner",
-            "state": {
-                "device_id": "1d7c7408...",
-                "type": "aircon",
-                "power": "POWER_OFF",
-                "mode": "COOL",
-                "current_temp": 22,
-                "target_temp": 25,
-                "wind_strength": "MID"
-            },
-            "timestamp": "2025-10-27T22:30:45.123456"
+            "state": { power: "ON", target_temp: 25, ... },
+            "source": "cache" 또는 "gateway",
+            "timestamp": "2025-10-28T12:30:45"
         }
     """
     try:
+        from backend.services.device_state_manager import device_state_manager
+        
         logger.info(f"📊 기기 상태 조회: {device_id}")
         
         # DB에서 기기 확인
@@ -428,36 +442,69 @@ async def get_device_state(device_id: str):
             logger.warning(f"⚠️  기기를 찾을 수 없습니다: {device_id}")
             raise HTTPException(status_code=404, detail="기기를 찾을 수 없습니다")
         
-        # Gateway를 통해 LG API에서 실시간 상태 조회
+        device_type = device.get("device_type")
+        
+        # 1️⃣ 로컬 캐시 우선 확인 (Gateway 강제 조회 아닐 때)
+        if not force_gateway:
+            cached_state = device_state_manager.get_device_state(device_id)
+            if cached_state:
+                logger.info(f"✅ 로컬 캐시에서 상태 조회")
+                return {
+                    "success": True,
+                    "device_id": device_id,
+                    "name": device.get("alias"),
+                    "device_type": device_type,
+                    "state": cached_state,
+                    "source": "cache",
+                    "timestamp": datetime.now().isoformat()
+                }
+        
+        # 2️⃣ Gateway에서 조회 (초기 로그인 또는 캐시 만료 또는 강제 조회)
+        logger.info(f"🌐 Gateway에서 상태 조회 중...")
         from backend.services.gateway_client import gateway_client
         
         state_response = await gateway_client.get_device_state(device_id)
         
         if not state_response or "error" in state_response:
-            logger.warning(f"⚠️  Gateway에서 상태 조회 실패: {state_response}")
+            logger.warning(f"⚠️  Gateway에서 상태 조회 실패, 로컬 캐시 사용")
+            
+            # Gateway 실패 시 로컬 캐시로 폴백
+            cached_state = device_state_manager.get_device_state(device_id)
+            if cached_state:
+                logger.info(f"✅ 로컬 캐시로 폴백")
+                return {
+                    "success": True,
+                    "device_id": device_id,
+                    "name": device.get("alias"),
+                    "device_type": device_type,
+                    "state": cached_state,
+                    "source": "cache_fallback",
+                    "timestamp": datetime.now().isoformat()
+                }
+            
             return {
                 "success": False,
                 "device_id": device_id,
-                "message": "Gateway에서 상태를 조회할 수 없습니다",
+                "message": "Gateway 상태 조회 실패 및 캐시 없음",
                 "error": state_response.get("error") if isinstance(state_response, dict) else str(state_response)
             }
         
-        # 응답 구조 정규화
+        # 3️⃣ Gateway에서 조회한 상태를 로컬 캐시에 저장
         state_data = state_response
+        device_state_manager.save_device_state(device_id, state_data, source="gateway")
         
-        logger.info(f"✅ 상태 조회 성공")
+        logger.info(f"✅ Gateway에서 상태 조회 및 로컬 캐시 저장")
         
         return {
             "success": True,
             "device_id": device_id,
             "name": device.get("alias"),
-            "device_type": device.get("device_type"),
+            "device_type": device_type,
             "state": state_data,
+            "source": "gateway",
             "timestamp": datetime.now().isoformat()
         }
     
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"❌ 상태 조회 중 오류: {e}", exc_info=True)
         return {
@@ -466,5 +513,161 @@ async def get_device_state(device_id: str):
         }
 
 
-from datetime import datetime
+# ===============================================================================
+# 🎮 디바이스 액션 관리 엔드포인트
+# ===============================================================================
+
+from backend.core.device_actions import (
+    get_device_actions,
+    get_action_info,
+    validate_action,
+    get_supported_device_types,
+    format_action_for_display,
+    get_action_color,
+)
+
+
+@router.get("/actions/types")
+async def get_action_types():
+    """기능: 지원하는 기기 타입 조회.
+    
+    Returns:
+        {
+            "success": true,
+            "device_types": ["air_purifier", "air_conditioner"],
+            "count": 2
+        }
+    """
+    try:
+        device_types = get_supported_device_types()
+        logger.info(f"✅ 지원하는 기기 타입 조회: {len(device_types)}개")
+        
+        return {
+            "success": True,
+            "device_types": device_types,
+            "count": len(device_types)
+        }
+    except Exception as e:
+        logger.error(f"❌ 오류: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"오류: {str(e)}"
+        }
+
+
+@router.get("/actions/{device_type}")
+async def get_device_type_actions(device_type: str):
+    """기능: 특정 기기 타입의 모든 액션 조회.
+    
+    Args:
+        device_type: 기기 타입 (air_purifier, air_conditioner)
+    
+    Returns:
+        {
+            "success": true,
+            "device_type": "air_purifier",
+            "actions": {
+                "purifier_on": {
+                    "name": "전원 켜기",
+                    "description": "공기청정기를 켭니다",
+                    "type": "power",
+                    "category": "operation",
+                    "icon": "Power",
+                    "value": null
+                },
+                ...
+            },
+            "count": 13
+        }
+    """
+    try:
+        actions = get_device_actions(device_type)
+        
+        if not actions:
+            logger.warning(f"⚠️  지원하지 않는 기기 타입: {device_type}")
+            return {
+                "success": False,
+                "message": f"지원하지 않는 기기 타입: {device_type}"
+            }
+        
+        # 액션 정보를 프론트엔드 포맷으로 변환
+        formatted_actions = {}
+        for action_name, action_info in actions.items():
+            formatted_actions[action_name] = format_action_for_display(action_info)
+        
+        logger.info(f"✅ {device_type} 액션 조회: {len(actions)}개")
+        
+        return {
+            "success": True,
+            "device_type": device_type,
+            "actions": formatted_actions,
+            "count": len(actions)
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ 오류: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"오류: {str(e)}"
+        }
+
+
+@router.get("/actions/{device_type}/{action}")
+async def get_action_detail(device_type: str, action: str):
+    """기능: 특정 액션의 상세 정보 조회.
+    
+    Args:
+        device_type: 기기 타입
+        action: 액션명
+    
+    Returns:
+        {
+            "success": true,
+            "device_type": "air_purifier",
+            "action": "purifier_on",
+            "info": {
+                "name": "전원 켜기",
+                "description": "공기청정기를 켭니다",
+                "type": "power",
+                "category": "operation",
+                "icon": "Power",
+                "value": null,
+                "color": "#FF6B6B"
+            },
+            "is_valid": true
+        }
+    """
+    try:
+        action_info = get_action_info(device_type, action)
+        is_valid = validate_action(device_type, action)
+        
+        if not is_valid:
+            logger.warning(f"⚠️  유효하지 않은 액션: {device_type}/{action}")
+            return {
+                "success": False,
+                "device_type": device_type,
+                "action": action,
+                "is_valid": False,
+                "message": f"유효하지 않은 액션: {action}"
+            }
+        
+        formatted_info = format_action_for_display(action_info)
+        formatted_info["color"] = get_action_color(action_info.get("type"))
+        
+        logger.info(f"✅ 액션 상세 조회: {device_type}/{action}")
+        
+        return {
+            "success": True,
+            "device_type": device_type,
+            "action": action,
+            "info": formatted_info,
+            "is_valid": is_valid
+        }
+    
+    except Exception as e:
+        logger.error(f"❌ 오류: {e}", exc_info=True)
+        return {
+            "success": False,
+            "message": f"오류: {str(e)}"
+        }
 
