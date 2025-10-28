@@ -15,12 +15,23 @@ sudo apt update
 
 # 2. 필수 시스템 패키지 설치
 echo "📦 필수 패키지 설치 중..."
+
+# 기본 패키지 (필수)
 sudo apt install -y git python3-pip python3-venv python3-dev \
-  ffmpeg python3-opencv \
-  libxcb-shm0 libcdio-paranoia-dev libsdl2-2.0-0 libxv1 \
-  libtheora0 libva-drm2 libva-x11-2 libvdpau1 libharfbuzz0b \
-  libbluray2 libatlas-base-dev libhdf5-103 libgtk-3-0 \
-  libdc1394-22 libopenexr25
+  ffmpeg python3-opencv python3-numpy \
+  libxcb-shm0 libsdl2-2.0-0 libxv1 libtheora0 \
+  libva-drm2 libva-x11-2 libvdpau1 libharfbuzz0b \
+  libbluray2 libatlas-base-dev libgtk-3-0
+
+# 선택적 패키지 (설치 가능한 것만)
+echo "📦 선택적 의존성 설치 중..."
+for pkg in libcdio-paranoia-dev libhdf5-dev libdc1394-dev libopenexr-dev; do
+    if apt-cache show "$pkg" &>/dev/null; then
+        sudo apt install -y "$pkg" || echo "⚠️  $pkg 설치 실패 (무시)"
+    else
+        echo "ℹ️  $pkg: 패키지를 찾을 수 없음 (선택사항)"
+    fi
+done
 
 # 3. Rust 설치 확인
 if ! command -v rustc &> /dev/null; then

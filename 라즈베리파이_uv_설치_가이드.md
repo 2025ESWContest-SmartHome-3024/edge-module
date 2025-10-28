@@ -43,8 +43,8 @@ sudo apt install -y git python3-pip python3-venv python3-dev \
   ffmpeg python3-opencv \
   libxcb-shm0 libcdio-paranoia-dev libsdl2-2.0-0 libxv1 \
   libtheora0 libva-drm2 libva-x11-2 libvdpau1 libharfbuzz0b \
-  libbluray2 libatlas-base-dev libhdf5-103 libgtk-3-0 \
-  libdc1394-22 libopenexr25
+  libbluray2 libatlas-base-dev libhdf5-dev libgtk-3-0 \
+  libdc1394-dev libopenexr-dev
 ```
 
 #### 2-2. Rust 및 uv 설치
