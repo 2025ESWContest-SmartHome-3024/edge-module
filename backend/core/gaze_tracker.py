@@ -53,9 +53,17 @@ class WebGazeTracker:
         if not self.cap.isOpened():
             raise RuntimeError(f"Cannot open camera {self.camera_index}")
         
-        # ⭐ 간소화: NoOp 필터만 사용 (필터링 비활성화)
-        self.smoother = NoSmoother()
-        print(f"[GazeTracker] Initialized with NoOp filter (no smoothing)")
+        # ⭐ Kalman 필터 활성화 (노이즈 제거, 안정성 향상)
+        if self.filter_method == "kalman":
+            from model.filters import KalmanSmoother
+            self.smoother = KalmanSmoother(
+                process_noise=0.001,      # 낮음 = 더 안정적 (덜 민감)
+                measurement_noise=10.0    # 높음 = 노이즈 제거 강화
+            )
+            print(f"[GazeTracker] Initialized with Kalman filter (high stability)")
+        else:
+            self.smoother = NoSmoother()
+            print(f"[GazeTracker] Initialized with NoOp filter (no smoothing)")
 
             
     def load_calibration(self, model_path: str):
