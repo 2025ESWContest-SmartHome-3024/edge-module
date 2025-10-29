@@ -122,31 +122,16 @@ class Database:
                 conn.commit()
                 logger.info(f"[Database] 데모 사용자 생성: {self.DEFAULT_USERNAME}")
             
-            # 더미 보정 파일 생성 및 등록
+            # ⭐ 프로덕션 모드: 더미 보정 생성하지 않음
+            # 사용자가 /calibration 페이지에서 실제 보정을 진행해야 함
             user_id = self.get_demo_user_id()
             
-            # 이미 보정이 등록되었는지 확인
+            # 보정 파일 확인 (정보 제공용)
             cursor.execute("SELECT id FROM calibrations WHERE user_id = ?", (user_id,))
             has_calibration = cursor.fetchone() is not None
             
             if not has_calibration:
-                from backend.core.dummy_calibration import create_dummy_calibration
-                
-                try:
-                    calibration_file = create_dummy_calibration()
-                    
-                    # 데이터베이스에 등록
-                    cursor.execute(
-                        """
-                        INSERT INTO calibrations (user_id, calibration_file, method)
-                        VALUES (?, ?, ?)
-                        """,
-                        (user_id, str(calibration_file), "dummy")
-                    )
-                    conn.commit()
-                    logger.info(f"[Database] ✅ 더미 보정 등록됨: {calibration_file}")
-                except Exception as e:
-                    logger.error(f"[Database] ❌ 더미 보정 생성 실패: {e}")
+                logger.info("[Database] ℹ️  보정 파일이 없습니다. /calibration 페이지로 이동하세요.")
     
     def get_demo_user_id(self) -> int:
         """기능: 데모 사용자 ID 조회.
