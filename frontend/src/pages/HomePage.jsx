@@ -103,14 +103,14 @@ function HomePage({ onLogout }) {
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission().then(permission => {
                 if (permission === 'granted') {
-                    console.log('[HomePage] 🔔 Browser Notification 권한 승인됨')
+                    console.log('[HomePage] Browser Notification 권한 승인됨')
                     // 권한 승인 시 시작 알림
-                    new Notification('🏠 GazeHome에 오신 것을 환영합니다!', {
+                    new Notification('GazeHome에 오신 것을 환영합니다!', {
                         body: `${storedUsername}님, 시선으로 스마트홈을 제어해보세요.`,
                         icon: '/gazehome-icon.png'
                     })
                 } else {
-                    console.log('[HomePage] ⚠️ Browser Notification 권한 거부됨')
+                    console.log('[HomePage] Browser Notification 권한 거부됨')
                 }
             })
         }
@@ -307,7 +307,7 @@ function HomePage({ onLogout }) {
             if (data.type === 'recommendation') {
                 // ✅ WebSocket 메시지 구조: { type: 'recommendation', data: { recommendation_id, title, contents } }
                 const recData = data.data || data
-                
+
                 console.log('[HomePage] 추천 수신:', recData.title)
                 console.log('[HomePage] 추천 ID:', recData.recommendation_id)
                 console.log('[HomePage] 추천 내용:', recData.contents || recData.description || recData.content)
@@ -326,14 +326,14 @@ function HomePage({ onLogout }) {
 
                 // 🔔 Browser Notification API를 통한 알람
                 if ('Notification' in window && Notification.permission === 'granted') {
-                    new Notification('🏠 GazeHome 추천', {
+                    new Notification('GazeHome 추천', {
                         body: recData.title,
                         icon: '/gazehome-icon.png',
                         badge: '/gazehome-badge.png',
                         tag: 'ws-recommendation',
                         requireInteraction: true
                     })
-                    console.log('[HomePage] 🔔 Browser Notification 발송됨')
+                    console.log('[HomePage] Browser Notification 발송됨')
                 }
             }
         }
@@ -502,7 +502,7 @@ function HomePage({ onLogout }) {
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                     >
-                        <h1>안녕하세요, {username}님! 👋</h1>
+                        <h1>안녕하세요, {username}님!</h1>
                         <p>시선으로 스마트홈을 제어해보세요</p>
                     </motion.div>
 
