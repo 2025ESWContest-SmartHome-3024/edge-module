@@ -1,33 +1,16 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { motion } from 'framer-motion'
-import { Sparkles, AlertCircle, CheckCircle, TrendingUp } from 'lucide-react'
+import { Sparkles, AlertCircle, CheckCircle } from 'lucide-react'
 import './RecommendationModal.css'
 
 /**
- * 우선순위별 색상 및 아이콘 정의
- * 5: 긴급 (빨강)
- * 4: 높음 (주황)
- * 3: 보통 (파랑)
- * 2: 낮음 (초록)
- * 1: 참고 (회색)
- */
-const PRIORITY_COLORS = {
-    5: { bg: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', icon: AlertCircle },
-    4: { bg: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)', icon: TrendingUp },
-    3: { bg: 'rgba(59, 130, 246, 0.1)', color: 'var(--info)', icon: Sparkles },
-    2: { bg: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', icon: CheckCircle },
-    1: { bg: 'rgba(156, 163, 175, 0.1)', color: 'var(--gray-500)', icon: Sparkles },
-}
-
-/**
  * AI 추천 모달 컴포넌트
- * - 최상위 추천 사항을 메인 영역에 표시
- * - 추가 추천 3개까지 리스트에 표시
+ * - AI 추천을 표시 (title, contents만)
  * - 사용자가 추천을 수락하거나 거절할 수 있음
  * - 🔒 버튼 클릭 후 1.5초 포인터 고정
- * - 👁️ 모달 위에서 깜빡임 감지 → 버튼 실행
+ * - 👁️ 모달 위에서 깜빡임 감지 → "수락" 버튼 실행
  * 
- * @param {Array} recommendations - 추천 배열
+ * @param {Array} recommendations - 추천 배열 (단일 추천만 사용)
  * @param {Function} onAccept - 추천 수락 콜백
  * @param {Function} onClose - 모달 닫기 콜백
  * @param {boolean} prolongedBlink - 0.5초 이상 눈깜빡임
@@ -51,20 +34,10 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     const dwellTimerRef = useRef(null)
     const DWELL_TIME = 2000 // 2초
 
-    // 최상위 추천 (우선순위 최고)
+    // 최상위 추천 (단일 추천)
     const topRecommendation = recommendations[0]
 
-    // 추천 목록 메모이제이션 - 불필요한 배열 생성 방지
-    const otherRecommendations = useMemo(
-        () => recommendations.slice(1, 4),
-        [recommendations]
-    )
-
     if (!topRecommendation) return null
-
-    // 우선순위에 맞는 색상 스타일 가져오기
-    const priorityStyle = PRIORITY_COLORS[topRecommendation.priority] || PRIORITY_COLORS[3]
-    const PriorityIcon = priorityStyle.icon
 
     /**
      * 버튼 클릭 핸들러
@@ -242,38 +215,9 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
 
                 {/* 주요 추천 사항 */}
                 <div className="recommendation-content">
-                    {/* 우선순위 배지 */}
-                    <div
-                        className="priority-badge"
-                        style={{
-                            background: priorityStyle.bg,
-                            color: priorityStyle.color
-                        }}
-                    >
-                        <PriorityIcon size={16} />
-                        <span>
-                            {topRecommendation.priority === 5 ? '긴급' :
-                                topRecommendation.priority === 4 ? '높음' :
-                                    topRecommendation.priority === 3 ? '보통' :
-                                        topRecommendation.priority === 2 ? '낮음' : '참고'}
-                        </span>
-                    </div>
-
-                    {/* 추천 제목 및 설명 */}
+                    {/* 추천 제목 및 내용 */}
                     <h3 className="recommendation-title">{topRecommendation.title}</h3>
-                    <p className="recommendation-description">{topRecommendation.description}</p>
-
-                    {/* 추천 상세 정보 */}
-                    <div className="recommendation-details">
-                        <div className="detail-row">
-                            <span className="detail-label">기기</span>
-                            <span className="detail-value">{topRecommendation.device_name}</span>
-                        </div>
-                        <div className="detail-row">
-                            <span className="detail-label">이유</span>
-                            <span className="detail-value">{topRecommendation.reason}</span>
-                        </div>
-                    </div>
+                    <p className="recommendation-description">{topRecommendation.contents}</p>
 
                     {/* 액션 버튼 - YES / NO */}
                     <div className="modal-actions">
@@ -334,48 +278,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                     </div>
                 </div>
 
-                {/* 추가 추천 목록 */}
-                {otherRecommendations.length > 0 && (
-                    <div className="other-recommendations">
-                        <div className="other-header">
-                            <span>다른 추천 {otherRecommendations.length}개</span>
-                        </div>
-                        <div className="other-list">
-                            {/* 최대 3개의 추가 추천 표시 */}
-                            {otherRecommendations.map((rec) => {
-                                const style = PRIORITY_COLORS[rec.priority] || PRIORITY_COLORS[3]
-                                const Icon = style.icon
-
-                                return (
-                                    <div
-                                        key={rec.id}
-                                        className="other-item"
-                                        onClick={() => handleButtonClick(() => onAccept(rec), true)}
-                                        style={{
-                                            cursor: isLocked ? 'not-allowed' : 'pointer',
-                                            opacity: isLocked ? 0.6 : 1,
-                                            transition: 'opacity 0.2s ease-out'
-                                        }}
-                                    >
-                                        <div
-                                            className="other-icon"
-                                            style={{
-                                                background: style.bg,
-                                                color: style.color
-                                            }}
-                                        >
-                                            <Icon size={16} />
-                                        </div>
-                                        <div className="other-info">
-                                            <div className="other-title">{rec.title}</div>
-                                            <div className="other-device">{rec.device_name}</div>
-                                        </div>
-                                    </div>
-                                )
-                            })}
-                        </div>
-                    </div>
-                )}
+                {/* 추가 추천 목록 - 제거 (단일 추천만 표시) */}
             </motion.div>
         </motion.div>
     )
