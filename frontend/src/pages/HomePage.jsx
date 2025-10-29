@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     Eye, LogOut, Settings, Sparkles,
-    Bell, User
+    Bell, User, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import GazeCursor from '../components/GazeCursor'
 import DeviceCard from '../components/DeviceCard'
@@ -41,12 +41,14 @@ function HomePage({ onLogout }) {
     // 🔒 현재 제어 중인 기기 (중복 클릭 방지)
     const [controllingDevice, setControllingDevice] = useState(null)
 
-    // 📄 페이지네이션 제거 - 고정 2개 기기만 표시
+    // 📄 페이지네이션 - 한 번에 1개 기기만 표시
     // 고정 기기 ID (에어컨1, 공기청정기)
     const FIXED_DEVICE_IDS = [
         '1d7c7408c31fbaf9ce2ea8634e2eda53f517d835a61440a4f75c5426eadc054a', // 에어컨1
         '13b708c0aa7f00b62835388f82643ae0cf0470fe24a14754f8d0bcb915513803'  // 공기청정기
     ]
+    // 현재 표시 중인 기기 인덱스
+    const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0)
 
     /**
      * 포인터 1.5초 고정 함수
@@ -62,10 +64,32 @@ function HomePage({ onLogout }) {
 
     /**
      * 📄 고정 기기만 필터링 (에어컨1, 공기청정기)
+     * 페이지네이션: 현재 인덱스의 기기만 표시
      */
-    const displayDevices = devices.filter(device =>
+    const fixedDevices = devices.filter(device =>
         FIXED_DEVICE_IDS.includes(device.device_id)
     )
+
+    // 현재 표시할 기기 (배열의 첫 번째만 표시)
+    const displayDevices = fixedDevices.length > 0
+        ? [fixedDevices[currentDeviceIndex % fixedDevices.length]]
+        : []
+
+    // 다음 버튼 핸들러
+    const handleNextDevice = () => {
+        if (fixedDevices.length > 0) {
+            setCurrentDeviceIndex((prev) => (prev + 1) % fixedDevices.length)
+        }
+    }
+
+    // 이전 버튼 핸들러
+    const handlePrevDevice = () => {
+        if (fixedDevices.length > 0) {
+            setCurrentDeviceIndex((prev) =>
+                prev === 0 ? fixedDevices.length - 1 : prev - 1
+            )
+        }
+    }
 
     /**
      * 초기화: 사용자명 로드, 기기/추천 로드, WebSocket 연결
@@ -484,7 +508,7 @@ function HomePage({ onLogout }) {
                         <p>시선으로 스마트홈을 제어해보세요</p>
                     </motion.div>
 
-                    {/* 기기 그리드 - 고정 2개 기기만 표시 */}
+                    {/* 기기 그리드 - 페이지네이션 방식 */}
                     <motion.div
                         className="devices-section"
                         initial={{ opacity: 0 }}
@@ -494,23 +518,64 @@ function HomePage({ onLogout }) {
                         <div className="section-header">
                             <h2>내 기기</h2>
                             <span className="device-count">
-                                {displayDevices.length}개 기기
+                                {fixedDevices.length}개 기기
                             </span>
                         </div>
 
-                        {/* 기기 그리드 - 페이지네이션 제거 */}
-                        <div className="devices-grid">
-                            {displayDevices.map((device) => (
-                                <DeviceCard
-                                    key={device.device_id}
-                                    device={device}
-                                    onControl={handleDeviceControl}
-                                />
-                            ))}
-                        </div>
+                        {/* 기기 페이지네이션 */}
+                        {fixedDevices.length > 0 ? (
+                            <>
+                                <div className="pagination-controls">
+                                    {/* 이전 버튼 */}
+                                    <button
+                                        className="pagination-button prev"
+                                        onClick={handlePrevDevice}
+                                        disabled={fixedDevices.length === 1}
+                                    >
+                                        <ChevronLeft size={32} />
+                                        이전
+                                    </button>
 
-                        {/* 기기가 없을 때 안내 메시지 */}
-                        {displayDevices.length === 0 && (
+                                    {/* 페이지 인디케이터 */}
+                                    <div className="page-indicator">
+                                        <span className="current-page">
+                                            {currentDeviceIndex + 1}
+                                        </span>
+                                        <span> / {fixedDevices.length}</span>
+                                    </div>
+
+                                    {/* 다음 버튼 */}
+                                    <button
+                                        className="pagination-button next"
+                                        onClick={handleNextDevice}
+                                        disabled={fixedDevices.length === 1}
+                                    >
+                                        다음
+                                        <ChevronRight size={32} />
+                                    </button>
+                                </div>
+
+                                {/* 기기 카드 */}
+                                <div className="devices-grid">
+                                    <AnimatePresence mode="wait">
+                                        {displayDevices.map((device) => (
+                                            <motion.div
+                                                key={device.device_id}
+                                                initial={{ opacity: 0, x: 20 }}
+                                                animate={{ opacity: 1, x: 0 }}
+                                                exit={{ opacity: 0, x: -20 }}
+                                                transition={{ duration: 0.3 }}
+                                            >
+                                                <DeviceCard
+                                                    device={device}
+                                                    onControl={handleDeviceControl}
+                                                />
+                                            </motion.div>
+                                        ))}
+                                    </AnimatePresence>
+                                </div>
+                            </>
+                        ) : (
                             <div className="no-devices-message">
                                 <p>등록된 기기가 없습니다</p>
                                 <p className="hint">에어컨1과 공기청정기를 등록해주세요</p>
