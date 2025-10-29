@@ -95,4 +95,5 @@ $RECYCLE.BIN/
 *.swp
 boot/
 mnt/
-*.img
+*.img# Calibration data
+~/.gazehome/
