@@ -305,15 +305,19 @@ function HomePage({ onLogout }) {
 
             // 추천 메시지 처리 (WebSocket을 통한 백엔드 푸시)
             if (data.type === 'recommendation') {
-                console.log('[HomePage] 추천 수신:', data.title)
-                console.log('[HomePage] 추천 내용:', data.contents || data.description || data.content)
+                // ✅ WebSocket 메시지 구조: { type: 'recommendation', data: { recommendation_id, title, contents } }
+                const recData = data.data || data
+                
+                console.log('[HomePage] 추천 수신:', recData.title)
+                console.log('[HomePage] 추천 ID:', recData.recommendation_id)
+                console.log('[HomePage] 추천 내용:', recData.contents || recData.description || recData.content)
                 console.log('[HomePage] 추천 시간:', new Date().toLocaleString())
 
                 const recommendation = {
-                    id: data.recommendation_id || `rec_${Date.now()}`,
-                    recommendation_id: data.recommendation_id || `rec_${Date.now()}`, // ✅ 백엔드 confirm API용
-                    title: data.title,
-                    contents: data.contents || data.description || data.content, // ✅ contents 필드 사용
+                    id: recData.recommendation_id,
+                    recommendation_id: recData.recommendation_id, // ✅ AI-Server에서 온 ID 그대로 사용
+                    title: recData.title,
+                    contents: recData.contents || recData.description || recData.content,
                     timestamp: new Date().toISOString()
                 }
 
@@ -323,7 +327,7 @@ function HomePage({ onLogout }) {
                 // 🔔 Browser Notification API를 통한 알람
                 if ('Notification' in window && Notification.permission === 'granted') {
                     new Notification('🏠 GazeHome 추천', {
-                        body: data.title,
+                        body: recData.title,
                         icon: '/gazehome-icon.png',
                         badge: '/gazehome-badge.png',
                         tag: 'ws-recommendation',
