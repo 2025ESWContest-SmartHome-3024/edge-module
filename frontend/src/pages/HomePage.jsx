@@ -310,16 +310,10 @@ function HomePage({ onLogout }) {
                 console.log('[HomePage] 추천 시간:', new Date().toLocaleString())
 
                 const recommendation = {
-                    id: `rec_ws_${Date.now()}`,
-                    recommendation_id: data.recommendation_id || `rec_ws_${Date.now()}`, // ✅ 백엔드 confirm API용
+                    id: data.recommendation_id || `rec_${Date.now()}`,
+                    recommendation_id: data.recommendation_id || `rec_${Date.now()}`, // ✅ 백엔드 confirm API용
                     title: data.title,
-                    description: data.contents || data.description || data.content, // ✅ contents (복수형) 우선 처리
-                    device_id: data.device_id || null,
-                    device_name: data.device_name || 'AI 추천',
-                    action: data.action || null,
-                    params: data.params || {},
-                    reason: data.reason || data.contents || data.description || data.content, // ✅ contents 추가
-                    priority: data.priority || 3,
+                    contents: data.contents || data.description || data.content, // ✅ contents 필드 사용
                     timestamp: new Date().toISOString()
                 }
 

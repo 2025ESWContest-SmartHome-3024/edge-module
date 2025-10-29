@@ -25,10 +25,10 @@ class Settings(BaseSettings):
     # - tiny_mlp: 신경망, 최고 정확도 (~200ms) - RPi4에는 너무 무거움
     model_name: str = "ridge"
     # 라즈베리파이 최적화 필터:
-    # - noop: 필터링 없음, 매우 빠름, 최소 메모리 (노이즈 많음)
-    # - kalman (권장): 칼만 필터, 노이즈 제거, 안정적 (~20ms 추가)
+    # - noop (권장): 필터링 없음, 매우 빠름, 최소 메모리
     # - kde: 커널 밀도 추정, 약간의 오버헤드 (~10ms 추가)
-    filter_method: str = "kalman"  # noop → kalman (안정성 우선)
+    # - kalman: 칼만 필터, 노이즈 제거, 안정적 (~20ms 추가)
+    filter_method: str = "noop"
     
     # ===== 디스플레이 설정 (7inch 1024x600 → 800x480 최적화) =====
     # 7inch 디스플레이 해상도: 800x480 (표준)
