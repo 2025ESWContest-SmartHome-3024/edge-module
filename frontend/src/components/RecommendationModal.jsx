@@ -37,6 +37,11 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     // 최상위 추천 (단일 추천)
     const topRecommendation = recommendations[0]
 
+    // 디버깅: 추천 데이터 확인
+    console.log('[RecommendationModal] 추천 데이터:', topRecommendation)
+    console.log('[RecommendationModal] title:', topRecommendation?.title)
+    console.log('[RecommendationModal] contents:', topRecommendation?.contents)
+
     if (!topRecommendation) return null
 
     /**
@@ -216,8 +221,12 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                 {/* 주요 추천 사항 */}
                 <div className="recommendation-content">
                     {/* 추천 제목 및 내용 */}
-                    <h3 className="recommendation-title">{topRecommendation.title}</h3>
-                    <p className="recommendation-description">{topRecommendation.contents}</p>
+                    <h3 className="recommendation-title">
+                        {topRecommendation.title || '제목 없음'}
+                    </h3>
+                    <p className="recommendation-description">
+                        {topRecommendation.contents || '내용 없음'}
+                    </p>
 
                     {/* 액션 버튼 - YES / NO */}
                     <div className="modal-actions">
