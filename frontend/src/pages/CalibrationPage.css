@@ -77,6 +77,25 @@
     box-shadow: var(--shadow-xl);
 }
 
+/* 자동 시작 메시지 */
+.auto-start-message {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-md);
+    margin-top: var(--spacing-xl);
+    padding: var(--spacing-lg);
+    background: rgba(59, 130, 246, 0.1);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+}
+
+.auto-start-message p {
+    margin: 0;
+    color: var(--primary);
+    font-weight: 600;
+}
+
 .calibration-canvas {
     width: 100vw;
     height: 100vh;

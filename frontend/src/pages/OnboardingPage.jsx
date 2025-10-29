@@ -15,18 +15,30 @@ function OnboardingPage({ onLogin }) {
     const [loginMessage, setLoginMessage] = useState('시스템 초기화 중...')
 
     /**
-     * 페이지 로드 시 자동 로그인
+     * 페이지 로드 시 자동 로그인 (최소 5초 대기)
      */
     useEffect(() => {
         const autoLogin = async () => {
             try {
                 console.log('🚀 자동 로그인 시작...')
-                setLoginMessage('사용자 인증 중...')
+                const startTime = Date.now()
 
-                // 1초 딜레이 (사용자에게 로딩 표시)
+                setLoginMessage('사용자 인증 중...')
                 await new Promise(resolve => setTimeout(resolve, 1000))
 
                 setLoginMessage('시선 추적 시스템 준비 중...')
+                await new Promise(resolve => setTimeout(resolve, 1500))
+
+                setLoginMessage('기기 연결 확인 중...')
+                await new Promise(resolve => setTimeout(resolve, 1500))
+
+                // 최소 5초가 지나지 않았다면 남은 시간만큼 대기
+                const elapsed = Date.now() - startTime
+                const remaining = Math.max(0, 5000 - elapsed)
+                if (remaining > 0) {
+                    setLoginMessage('시스템 준비 완료...')
+                    await new Promise(resolve => setTimeout(resolve, remaining))
+                }
 
                 // 부모 로그인 핸들러 호출
                 await onLogin()

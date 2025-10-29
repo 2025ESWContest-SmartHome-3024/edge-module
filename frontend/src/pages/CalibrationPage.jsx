@@ -73,6 +73,21 @@ function CalibrationPage({ onComplete }) {
     }, [])
 
     /**
+     * 자동 보정 시작 (페이지 로드 후 3초 뒤)
+     */
+    useEffect(() => {
+        if (status === 'init') {
+            setMessage('보정을 자동으로 시작합니다...')
+            const timer = setTimeout(() => {
+                console.log('[CalibrationPage] 자동 보정 시작')
+                startCalibration()
+            }, 3000)
+
+            return () => clearTimeout(timer)
+        }
+    }, [status])
+
+    /**
      * 👁️ 얼굴 인식 실패 감지 타이머
      * - 보정 중에 10초 이상 얼굴이 인식되지 않으면 경고 팝업
      */
@@ -627,7 +642,7 @@ function CalibrationPage({ onComplete }) {
     return (
         <div className="calibration-page">
             <AnimatePresence mode="wait">
-                {/* 초기 상태: 보정 안내 */}
+                {/* 초기 상태: 보정 안내 및 자동 시작 */}
                 {status === 'init' && (
                     <motion.div
                         className="calibration-intro"
@@ -647,10 +662,10 @@ function CalibrationPage({ onComplete }) {
                                 <li>얼굴을 움직이지 마세요</li>
                                 <li>깜빡임은 자연스럽게 해도 됩니다</li>
                             </ul>
-                            <button className="start-button" onClick={startCalibration}>
-                                <Eye size={20} />
-                                보정 시작
-                            </button>
+                            <div className="auto-start-message">
+                                <span className="loading-spinner"></span>
+                                <p>{message}</p>
+                            </div>
                         </div>
                     </motion.div>
                 )}

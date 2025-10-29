@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
         await gaze_tracker.initialize()
         logger.info("[Backend] ✅ 시선 추적기 초기화됨")
         
-        # ⭐ 더미 보정 파일 자동 로드
+        # ⭐ 실제 보정 파일 로드 (있을 경우만)
         from pathlib import Path
         from backend.core.config import settings as config_settings
         
@@ -57,11 +57,12 @@ async def lifespan(app: FastAPI):
         if default_calibration.exists():
             try:
                 gaze_tracker.load_calibration(str(default_calibration))
-                logger.info(f"[Backend] ✅ 더미 보정 로드됨: {default_calibration}")
+                logger.info(f"[Backend] ✅ 보정 파일 로드됨: {default_calibration}")
             except Exception as e:
-                logger.warning(f"[Backend] ⚠️  더미 보정 로드 실패: {e}")
+                logger.warning(f"[Backend] ⚠️  보정 파일 로드 실패: {e}")
+                logger.info("[Backend] → 보정이 필요합니다. /calibration 페이지로 이동하세요.")
         else:
-            logger.warning(f"[Backend] ⚠️  보정 파일을 찾을 수 없습니다: {default_calibration}")
+            logger.info("[Backend] ℹ️  보정 파일이 없습니다. 신규 보정이 필요합니다.")
         
         # 백그라운드에서 추적 시작
         asyncio.create_task(gaze_tracker.start_tracking())
