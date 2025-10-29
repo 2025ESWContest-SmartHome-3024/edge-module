@@ -42,10 +42,10 @@ function HomePage({ onLogout }) {
     const [controllingDevice, setControllingDevice] = useState(null)
 
     // 📄 페이지네이션 - 한 번에 1개 기기만 표시
-    // 고정 기기 ID (에어컨1, 공기청정기)
+    // 고정 기기 ID (에어컨1, 공기청정기 - 에어컨이 1페이지에 표시)
     const FIXED_DEVICE_IDS = [
-        '1d7c7408c31fbaf9ce2ea8634e2eda53f517d835a61440a4f75c5426eadc054a', // 에어컨1
-        '13b708c0aa7f00b62835388f82643ae0cf0470fe24a14754f8d0bcb915513803'  // 공기청정기
+        '1d7c7408c31fbaf9ce2ea8634e2eda53f517d835a61440a4f75c5426eadc054a', // 에어컨1 (1페이지)
+        '13b708c0aa7f00b62835388f82643ae0cf0470fe24a14754f8d0bcb915513803'  // 공기청정기 (2페이지)
     ]
     // 현재 표시 중인 기기 인덱스
     const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0)

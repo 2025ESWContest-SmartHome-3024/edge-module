@@ -32,9 +32,9 @@ function OnboardingPage({ onLogin }) {
                 setLoginMessage('기기 연결 확인 중...')
                 await new Promise(resolve => setTimeout(resolve, 1500))
 
-                // 최소 10초가 지나지 않았다면 남은 시간만큼 대기
+                // 최소 30초가 지나지 않았다면 남은 시간만큼 대기
                 const elapsed = Date.now() - startTime
-                const remaining = Math.max(0, 10000 - elapsed)
+                const remaining = Math.max(0, 30000 - elapsed)
                 if (remaining > 0) {
                     setLoginMessage('시스템 준비 완료...')
                     await new Promise(resolve => setTimeout(resolve, remaining))
