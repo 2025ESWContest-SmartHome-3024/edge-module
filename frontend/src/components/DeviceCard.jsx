@@ -60,11 +60,11 @@ function DeviceCard({ device, onControl }) {
     const cardRef = useRef(null)
     const statePollingRef = useRef(null)
 
-    // 👁️ Dwell Time 기능 (2초간 바라보면 토글)
+    // 👁️ Dwell Time 기능 (3초간 바라보면 토글 - 데모 최적화)
     const [dwellingButton, setDwellingButton] = useState(null) // 현재 바라보는 버튼
     const [dwellProgress, setDwellProgress] = useState(0) // 진행률 (0-100)
     const dwellTimerRef = useRef(null)
-    const DWELL_TIME = 2000 // 2초
+    const DWELL_TIME = 3000 // 3초 (데모용 - 포인터 고정 시간 증가)
 
     // ============================================================================
     // 초기화: 액션 정보 로드

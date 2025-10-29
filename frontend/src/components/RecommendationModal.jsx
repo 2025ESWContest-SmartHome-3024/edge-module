@@ -28,11 +28,11 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
     // 이전 prolongedBlink 상태 추적 (상태 변화 감지용)
     const prevBlinkRef = useRef(false)
 
-    // 👁️ Dwell Time 기능 (2초간 바라보면 토글)
+    // 👁️ Dwell Time 기능 (3초간 바라보면 토글 - 데모 최적화)
     const [dwellingButton, setDwellingButton] = useState(null) // 'accept' 또는 'reject'
     const [dwellProgress, setDwellProgress] = useState(0) // 진행률 (0-100)
     const dwellTimerRef = useRef(null)
-    const DWELL_TIME = 2000 // 2초
+    const DWELL_TIME = 3000 // 3초 (데모용 - 포인터 고정 시간 증가)
 
     // 최상위 추천 (단일 추천)
     const topRecommendation = recommendations[0]
