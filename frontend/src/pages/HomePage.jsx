@@ -435,7 +435,12 @@ function HomePage({ onLogout }) {
     return (
         <div className="home-page">
             {/* 시선 커서 표시 */}
-            <GazeCursor x={gazePosition.x} y={gazePosition.y} visible={isConnected} blink={blink} calibrated={calibrated} />
+            {/*
+                visible은 WebSocket 연결 상태(isConnected) 뿐만 아니라
+                보정 상태(calibrated)가 true일 때도 표시되도록 합니다.
+                이 변경은 개발/디버깅 시 포인터가 보이지 않는 문제를 완화합니다.
+            */}
+            <GazeCursor x={gazePosition.x} y={gazePosition.y} visible={isConnected || calibrated} blink={blink} calibrated={calibrated} />
 
             {/* 헤더 */}
             <header className="home-header">
