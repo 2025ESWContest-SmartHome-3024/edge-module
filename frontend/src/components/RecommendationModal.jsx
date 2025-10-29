@@ -244,7 +244,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             }}
                         >
                             <CheckCircle size={20} />
-                            👍 수락
+                            수락
                             {dwellingButton === 'accept' && (
                                 <span style={{
                                     position: 'absolute',
@@ -271,7 +271,7 @@ function RecommendationModal({ recommendations, onAccept, onClose, prolongedBlin
                             }}
                         >
                             <AlertCircle size={20} />
-                            👋 거절
+                            거절
                             {dwellingButton === 'reject' && (
                                 <span style={{
                                     position: 'absolute',
